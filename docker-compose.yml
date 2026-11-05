@@ -1,0 +1,57 @@
+# Production stack: Postgres + easyPOS + Caddy (reverse proxy, automatic HTTPS when a domain is set).
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: easypos
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run deploy/install.sh first}
+      POSTGRES_DB: easypos
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U easypos -d easypos"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      EASYPOS_DATABASE_URL: postgres://easypos:${POSTGRES_PASSWORD}@db:5432/easypos?sslmode=disable
+      EASYPOS_HTTP_ADDR: ":8080"
+      EASYPOS_SECURE_COOKIES: ${EASYPOS_SECURE_COOKIES:-false}
+      EASYPOS_BOOTSTRAP_COMPANY: ${EASYPOS_BOOTSTRAP_COMPANY:-easyPOS}
+      EASYPOS_BOOTSTRAP_OWNER_NAME: ${EASYPOS_BOOTSTRAP_OWNER_NAME:-Owner}
+      EASYPOS_BOOTSTRAP_OWNER_USERNAME: ${EASYPOS_BOOTSTRAP_OWNER_USERNAME:-owner}
+      EASYPOS_BOOTSTRAP_OWNER_PASSWORD: ${EASYPOS_BOOTSTRAP_OWNER_PASSWORD:?run deploy/install.sh first}
+    healthcheck:
+      test: ["CMD", "/easypos", "healthcheck"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # "http://:80" = plain HTTP by IP. Set EASYPOS_DOMAIN (e.g. pos.contoh.com) for automatic HTTPS.
+      EASYPOS_SITE: ${EASYPOS_DOMAIN:-http://:80}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:
