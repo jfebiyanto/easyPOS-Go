@@ -11,7 +11,9 @@ import (
 	"github.com/jfebiyanto/easyPOS-Go/internal/audit"
 	"github.com/jfebiyanto/easyPOS-Go/internal/catalog"
 	"github.com/jfebiyanto/easyPOS-Go/internal/identity"
+	"github.com/jfebiyanto/easyPOS-Go/internal/loyalty"
 	"github.com/jfebiyanto/easyPOS-Go/internal/numbering"
+	"github.com/jfebiyanto/easyPOS-Go/internal/returns"
 	"github.com/jfebiyanto/easyPOS-Go/internal/sales"
 )
 
@@ -28,11 +30,13 @@ func actorOf(u *identity.User) audit.Actor { return audit.Actor{ID: u.ID, Name: 
 // fail maps domain errors to HTTP statuses.
 func fail(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, catalog.ErrInvalid), errors.Is(err, sales.ErrInvalid), errors.Is(err, sales.ErrUnderpaid):
+	case errors.Is(err, catalog.ErrInvalid), errors.Is(err, sales.ErrInvalid), errors.Is(err, sales.ErrUnderpaid),
+		errors.Is(err, loyalty.ErrInvalid), errors.Is(err, returns.ErrInvalid), errors.Is(err, returns.ErrWindow),
+		errors.Is(err, returns.ErrVoided), errors.Is(err, returns.ErrOverReturn):
 		writeErr(w, http.StatusUnprocessableEntity, err.Error())
-	case errors.Is(err, catalog.ErrDuplicate), errors.Is(err, sales.ErrInsufficientStock):
+	case errors.Is(err, catalog.ErrDuplicate), errors.Is(err, sales.ErrInsufficientStock), errors.Is(err, loyalty.ErrDuplicatePhone):
 		writeErr(w, http.StatusConflict, err.Error())
-	case errors.Is(err, catalog.ErrNotFound), errors.Is(err, sales.ErrNotFound):
+	case errors.Is(err, catalog.ErrNotFound), errors.Is(err, sales.ErrNotFound), errors.Is(err, loyalty.ErrNotFound), errors.Is(err, returns.ErrNotFound):
 		writeErr(w, http.StatusNotFound, err.Error())
 	default:
 		writeErr(w, http.StatusInternalServerError, "terjadi kesalahan")
@@ -92,6 +96,38 @@ func (s *Server) mountPOS(r chi.Router) {
 			return
 		}
 		writeJSON(w, http.StatusOK, list)
+	})
+	r.Get("/customers", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.loyalty.Search(r.Context(), CurrentUser(r.Context()).CompanyID, r.URL.Query().Get("q"))
+		respond(w, list, err, http.StatusOK)
+	})
+	r.Post("/customers", func(w http.ResponseWriter, r *http.Request) { // quick member registration at the till (FR-B5-02)
+		var in loyalty.Input
+		if !decode(w, r, &in) {
+			return
+		}
+		in.IsMember = true
+		u := CurrentUser(r.Context())
+		c, err := s.loyalty.Create(r.Context(), actorOf(u), u.CompanyID, in)
+		respond(w, c, err, http.StatusCreated)
+	})
+	r.Get("/returns/lookup", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		res, err := s.returns.Lookup(r.Context(), returns.Actor{ID: u.ID, Name: u.Name, CompanyID: u.CompanyID, StoreID: *u.StoreID}, r.URL.Query().Get("number"))
+		respond(w, res, err, http.StatusOK)
+	})
+	r.Post("/returns", func(w http.ResponseWriter, r *http.Request) {
+		var in returns.Input
+		if !decode(w, r, &in) {
+			return
+		}
+		u := CurrentUser(r.Context())
+		res, err := s.returns.Create(r.Context(), returns.Actor{ID: u.ID, Name: u.Name, CompanyID: u.CompanyID, StoreID: *u.StoreID}, in)
+		code := http.StatusCreated
+		if res != nil && res.Replayed {
+			code = http.StatusOK
+		}
+		respond(w, res, err, code)
 	})
 	r.Post("/sales", func(w http.ResponseWriter, r *http.Request) {
 		u := CurrentUser(r.Context())
@@ -186,6 +222,40 @@ func (s *Server) mountAdmin(r chi.Router) {
 		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
 	})
 
+	r.Get("/customers", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.loyalty.Search(r.Context(), CurrentUser(r.Context()).CompanyID, r.URL.Query().Get("q"))
+		respond(w, list, err, http.StatusOK)
+	})
+	r.Post("/customers", func(w http.ResponseWriter, r *http.Request) {
+		var in loyalty.Input
+		if !decode(w, r, &in) {
+			return
+		}
+		u := CurrentUser(r.Context())
+		c, err := s.loyalty.Create(r.Context(), actorOf(u), u.CompanyID, in)
+		respond(w, c, err, http.StatusCreated)
+	})
+	r.Put("/customers/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var in loyalty.Input
+		if !decode(w, r, &in) {
+			return
+		}
+		u := CurrentUser(r.Context())
+		err := s.loyalty.Update(r.Context(), actorOf(u), u.CompanyID, chi.URLParam(r, "id"), in)
+		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
+	})
+	r.Post("/customers/{id}/points", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Delta  int    `json:"delta"`
+			Reason string `json:"reason"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		u := CurrentUser(r.Context())
+		err := s.loyalty.Adjust(r.Context(), actorOf(u), u.CompanyID, chi.URLParam(r, "id"), in.Delta, in.Reason)
+		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
+	})
 	r.Get("/stores", func(w http.ResponseWriter, r *http.Request) {
 		u := CurrentUser(r.Context())
 		rows, err := s.pool.Query(r.Context(), `SELECT id::text, code, name FROM stores WHERE company_id=$1 AND is_active

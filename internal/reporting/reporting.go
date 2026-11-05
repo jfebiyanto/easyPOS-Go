@@ -17,6 +17,9 @@ type Totals struct {
 	Revenue      string `json:"revenue"`
 	Tax          string `json:"tax"`
 	AvgBasket    string `json:"avg_basket"`
+	Returns      int    `json:"returns"`
+	ReturnTotal  string `json:"return_total"`
+	NetRevenue   string `json:"net_revenue"`
 }
 
 type DayRow struct {
@@ -52,6 +55,16 @@ func (s *Service) Sales(ctx context.Context, companyID, storeID, from, to string
 		AND business_date BETWEEN $3::date AND $4::date`, companyID, storeID, from, to).
 		Scan(&out.Totals.Transactions, &out.Totals.Revenue, &out.Totals.Tax, &out.Totals.AvgBasket, &out.Totals.Items)
 	if err != nil {
+		return nil, err
+	}
+	// Returns are dated by their own creation day in Jakarta, and reduce net revenue (FR-B6-02).
+	if err := s.pool.QueryRow(ctx, `SELECT count(*), COALESCE(sum(total),0)::text FROM sales_returns
+		WHERE company_id=$1 AND ($2='' OR store_id::text=$2)
+		AND (created_at AT TIME ZONE 'Asia/Jakarta')::date BETWEEN $3::date AND $4::date`, companyID, storeID, from, to).
+		Scan(&out.Totals.Returns, &out.Totals.ReturnTotal); err != nil {
+		return nil, err
+	}
+	if err := s.pool.QueryRow(ctx, `SELECT ($1::numeric - $2::numeric)::text`, out.Totals.Revenue, out.Totals.ReturnTotal).Scan(&out.Totals.NetRevenue); err != nil {
 		return nil, err
 	}
 	rows, err := s.pool.Query(ctx, `SELECT business_date::text, count(*), sum(total)::text FROM sales

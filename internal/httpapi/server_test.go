@@ -34,7 +34,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err := database.Migrate(pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `TRUNCATE sessions, activity_logs, sale_payments, sale_lines, sales, stock_ledger, store_stocks, numbering_configs, payment_types, products, product_groups, units, users, stores, companies CASCADE`); err != nil {
+	if _, err := pool.Exec(ctx, `TRUNCATE sessions, activity_logs, sales_return_lines, sales_returns, loyalty_ledger, customers, member_levels, sale_payments, sale_lines, sales, stock_ledger, store_stocks, numbering_configs, payment_types, products, product_groups, units, users, stores, companies CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	return pool

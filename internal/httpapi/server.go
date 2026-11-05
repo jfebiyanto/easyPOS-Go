@@ -19,7 +19,9 @@ import (
 	"github.com/jfebiyanto/easyPOS-Go/internal/audit"
 	"github.com/jfebiyanto/easyPOS-Go/internal/catalog"
 	"github.com/jfebiyanto/easyPOS-Go/internal/identity"
+	"github.com/jfebiyanto/easyPOS-Go/internal/loyalty"
 	"github.com/jfebiyanto/easyPOS-Go/internal/reporting"
+	"github.com/jfebiyanto/easyPOS-Go/internal/returns"
 	"github.com/jfebiyanto/easyPOS-Go/internal/sales"
 )
 
@@ -29,6 +31,8 @@ type Server struct {
 	catalog  *catalog.Service
 	sales    *sales.Service
 	reports  *reporting.Service
+	loyalty  *loyalty.Service
+	returns  *returns.Service
 	sessions *scs.SessionManager
 	web      fs.FS
 }
@@ -42,7 +46,8 @@ func New(pool *pgxpool.Pool, secureCookies bool, web fs.FS) *Server {
 	sm.Cookie.Secure = secureCookies
 	sm.Cookie.SameSite = http.SameSiteLaxMode
 	return &Server{pool: pool, identity: identity.NewService(pool), catalog: catalog.NewService(pool),
-		sales: sales.NewService(pool), reports: reporting.NewService(pool), sessions: sm, web: web}
+		sales: sales.NewService(pool), reports: reporting.NewService(pool), loyalty: loyalty.NewService(pool),
+		returns: returns.NewService(pool), sessions: sm, web: web}
 }
 
 func (s *Server) Identity() *identity.Service { return s.identity }

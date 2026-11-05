@@ -15,6 +15,7 @@ import (
 
 	"github.com/jfebiyanto/easyPOS-Go/internal/audit"
 	"github.com/jfebiyanto/easyPOS-Go/internal/inventory"
+	"github.com/jfebiyanto/easyPOS-Go/internal/loyalty"
 	"github.com/jfebiyanto/easyPOS-Go/internal/numbering"
 )
 
@@ -49,6 +50,7 @@ type PaymentInput struct {
 
 type CheckoutInput struct {
 	ClientUUID string         `json:"client_uuid"`
+	CustomerID string         `json:"customer_id"`
 	Lines      []LineInput    `json:"lines"`
 	Payments   []PaymentInput `json:"payments"`
 }
@@ -82,6 +84,8 @@ type Sale struct {
 	PaidTotal     string    `json:"paid_total"`
 	ChangeTotal   string    `json:"change_total"`
 	PPNInclusive  bool      `json:"ppn_inclusive"`
+	Customer      string    `json:"customer,omitempty"`
+	PointsEarned  int       `json:"points_earned,omitempty"`
 	Lines         []Line    `json:"lines,omitempty"`
 	Payments      []Payment `json:"payments,omitempty"`
 	Replayed      bool      `json:"replayed,omitempty"`
@@ -144,6 +148,16 @@ func (s *Service) checkoutTx(ctx context.Context, c Cashier, in CheckoutInput) (
 	rate, _ = decimal.NewFromString(rateStr)
 	if !ppnEnabled {
 		rate = decimal.Zero
+	}
+
+	var customer any
+	custName := ""
+	if in.CustomerID != "" {
+		var active bool
+		if err := tx.QueryRow(ctx, `SELECT name, is_active FROM customers WHERE id=$1 AND company_id=$2`, in.CustomerID, c.CompanyID).Scan(&custName, &active); err != nil || !active {
+			return nil, ErrInvalid
+		}
+		customer = in.CustomerID
 	}
 
 	// Merge duplicate products, then price every line from the server-side master (never trust client prices).
@@ -258,10 +272,10 @@ func (s *Service) checkoutTx(ctx context.Context, c Cashier, in CheckoutInput) (
 		Subtotal: subtotal.String(), DiscountTotal: discTotal.String(), TaxTotal: taxTotal.String(), Total: total.String(),
 		PaidTotal: paid.String(), ChangeTotal: change.String(), PPNInclusive: inclusive}
 	if err := tx.QueryRow(ctx, `INSERT INTO sales (company_id, store_id, number, client_uuid, business_date, cashier_id,
-			subtotal, discount_total, tax_total, total, paid_total, change_total, sold_at)
-		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id::text`,
+			subtotal, discount_total, tax_total, total, paid_total, change_total, sold_at, customer_id)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) RETURNING id::text`,
 		c.CompanyID, c.StoreID, number, in.ClientUUID, sale.BusinessDate, c.ID,
-		sale.Subtotal, sale.DiscountTotal, sale.TaxTotal, sale.Total, sale.PaidTotal, sale.ChangeTotal, now).Scan(&sale.ID); err != nil {
+		sale.Subtotal, sale.DiscountTotal, sale.TaxTotal, sale.Total, sale.PaidTotal, sale.ChangeTotal, now, customer).Scan(&sale.ID); err != nil {
 		return nil, err
 	}
 	for _, id := range ids {
@@ -287,6 +301,19 @@ func (s *Service) checkoutTx(ctx context.Context, c Cashier, in CheckoutInput) (
 		}
 		sale.Payments = append(sale.Payments, Payment{Type: name, Amount: p.Amount, Status: "confirmed"})
 	}
+	sale.Customer = custName
+	if in.CustomerID != "" { // members earn points on the final total (stock was locked before the customer: stable lock order)
+		pts, err := loyalty.Earn(ctx, tx, in.CustomerID, sale.ID, number, c.ID, total)
+		if err != nil {
+			return nil, err
+		}
+		if pts > 0 {
+			sale.PointsEarned = pts
+			if _, err := tx.Exec(ctx, `UPDATE sales SET points_earned=$2 WHERE id=$1`, sale.ID, pts); err != nil {
+				return nil, err
+			}
+		}
+	}
 	if err := audit.Record(ctx, tx, audit.Entry{CompanyID: c.CompanyID, Actor: audit.Actor{ID: c.ID, Name: c.Name},
 		Action: "sale.create", SubjectType: "sale", SubjectID: sale.ID, Description: number,
 		Properties: map[string]any{"total": sale.Total, "store_id": c.StoreID}}); err != nil {
@@ -296,12 +323,12 @@ func (s *Service) checkoutTx(ctx context.Context, c Cashier, in CheckoutInput) (
 }
 
 const saleCols = `s.id::text, s.number, s.business_date::text, s.sold_at, u.name, s.status, s.subtotal::text, s.discount_total::text,
-	s.tax_total::text, s.total::text, s.paid_total::text, s.change_total::text, c.ppn_inclusive`
+	s.tax_total::text, s.total::text, s.paid_total::text, s.change_total::text, c.ppn_inclusive, COALESCE(cu.name,''), s.points_earned`
 
 func scanSale(row pgx.Row) (*Sale, error) {
 	var x Sale
 	err := row.Scan(&x.ID, &x.Number, &x.BusinessDate, &x.SoldAt, &x.Cashier, &x.Status, &x.Subtotal, &x.DiscountTotal,
-		&x.TaxTotal, &x.Total, &x.PaidTotal, &x.ChangeTotal, &x.PPNInclusive)
+		&x.TaxTotal, &x.Total, &x.PaidTotal, &x.ChangeTotal, &x.PPNInclusive, &x.Customer, &x.PointsEarned)
 	return &x, err
 }
 
@@ -320,7 +347,7 @@ func (s *Service) byClientUUID(ctx context.Context, companyID, clientUUID string
 // Get loads a sale with lines and payments. A non-empty storeID restricts access to that store.
 func (s *Service) Get(ctx context.Context, companyID, storeID, id string) (*Sale, error) {
 	sale, err := scanSale(s.pool.QueryRow(ctx, `SELECT `+saleCols+` FROM sales s JOIN users u ON u.id=s.cashier_id
-		JOIN companies c ON c.id=s.company_id WHERE s.id=$1 AND s.company_id=$2 AND ($3='' OR s.store_id::text=$3)`, id, companyID, storeID))
+		JOIN companies c ON c.id=s.company_id LEFT JOIN customers cu ON cu.id=s.customer_id WHERE s.id=$1 AND s.company_id=$2 AND ($3='' OR s.store_id::text=$3)`, id, companyID, storeID))
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -360,7 +387,7 @@ func (s *Service) Get(ctx context.Context, companyID, storeID, id string) (*Sale
 // ListToday returns today's sales for the store (Jakarta date), newest first.
 func (s *Service) ListToday(ctx context.Context, companyID, storeID string) ([]Sale, error) {
 	rows, err := s.pool.Query(ctx, `SELECT `+saleCols+` FROM sales s JOIN users u ON u.id=s.cashier_id
-		JOIN companies c ON c.id=s.company_id WHERE s.company_id=$1 AND s.store_id=$2 AND s.business_date=$3::date
+		JOIN companies c ON c.id=s.company_id LEFT JOIN customers cu ON cu.id=s.customer_id WHERE s.company_id=$1 AND s.store_id=$2 AND s.business_date=$3::date
 		ORDER BY s.sold_at DESC LIMIT 200`, companyID, storeID, numbering.BusinessDate(s.now()))
 	if err != nil {
 		return nil, err
