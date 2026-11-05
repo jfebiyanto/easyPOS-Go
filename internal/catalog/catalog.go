@@ -44,6 +44,7 @@ type Product struct {
 	TrackStock bool    `json:"track_stock"`
 	IsActive   bool    `json:"is_active"`
 	OnHand     *string `json:"on_hand,omitempty"`
+	Tiers      []Tier  `json:"tiers,omitempty"`
 }
 
 func mapErr(err error) error {

@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -274,3 +275,5 @@ func TestBrandColor(t *testing.T) {
 		t.Fatalf("audit rows = %d, err %v", n, err)
 	}
 }
+
+func jsonDecode(r io.Reader, v any) error { return json.NewDecoder(r).Decode(v) }

@@ -128,7 +128,7 @@ function startApp(){
   $('#who').textContent=me.name+' · '+roleName[me.role];
   const tabs=[];
   if(me.role!=='owner')tabs.push(['pos','Kasir (POS)']);
-  if(me.role!=='cashier')tabs.push(['products','Produk'],['stock','Stok'],['customers','Pelanggan'],['report','Laporan']);
+  if(me.role!=='cashier')tabs.push(['products','Produk'],['stock','Stok'],['pricelists','Daftar Harga'],['customers','Pelanggan'],['report','Laporan']);
   if(me.role==='owner')tabs.push(['settings','Pengaturan']);
   $('#nav').innerHTML=tabs.map(([k,l])=>`<button class="tab" role="tab" data-k="${k}">${l}</button>`).join('');
   $('#nav').onclick=e=>{const k=e.target.dataset.k;if(k)go(k)};
@@ -137,7 +137,7 @@ function startApp(){
 function go(k){
   screen=k;detachPos();
   document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-selected',t.dataset.k===k));
-  ({pos:renderPOS,products:renderProducts,stock:renderStock,customers:renderCustomers,report:renderReport,settings:renderSettings})[k]();
+  ({pos:renderPOS,products:renderProducts,stock:renderStock,customers:renderCustomers,report:renderReport,settings:renderSettings,pricelists:renderPriceLists})[k]();
 }
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('id-ID',{timeZone:'Asia/Jakarta',dateStyle:'medium',timeStyle:'short'})},1000);
 
@@ -217,13 +217,15 @@ async function renderPOS(){
   document.addEventListener('keydown',posKeys);
   drawCart();
 }
+/* Harga bertingkat: tier tertinggi dengan min_qty <= qty, selain itu harga dasar (server tetap yang menentukan) */
+function uprice(p,q){let v=Number(p.base_price),best=-1;for(const t of p.tiers||[]){const m=Number(t.min_qty);if(m<=q&&m>best){best=m;v=Number(t.price)}}return v}
 function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
 async function searchLive(){
   const q=$('#scan').value.trim(),box=$('#results');
   if(q.length<2){box.hidden=true;return}
   products=await api('/pos/products?q='+encodeURIComponent(q));
   box.hidden=!products.length;
-  box.innerHTML=products.map((p,i)=>`<button data-i="${i}"><span class="num">${esc(p.sku)}</span><span class="name">${esc(p.name)}</span><span class="num">${rp(p.base_price)}</span><span class="badge ${Number(p.on_hand)<=0&&p.track_stock?'low':''}">${nf(p.on_hand)}</span></button>`).join('');
+  box.innerHTML=products.map((p,i)=>`<button data-i="${i}"><span class="num">${esc(p.sku)}</span><span class="name">${esc(p.name)}</span><span class="num">${rp(uprice(p,1))}</span><span class="badge ${Number(p.on_hand)<=0&&p.track_stock?'low':''}">${nf(p.on_hand)}</span></button>`).join('');
   box.onclick=e=>{const b=e.target.closest('button');if(b)add(products[b.dataset.i])};
 }
 async function onScan(e){
@@ -240,7 +242,7 @@ function add(p){
 }
 function chg(i,d){if(!cart[i])return;cart[i].qty=Math.max(1,cart[i].qty+d);drawCart()}
 function calc(){
-  let gross=0,items=0;for(const l of cart){gross+=Number(l.p.base_price)*l.qty;items+=l.qty}
+  let gross=0,items=0;for(const l of cart){gross+=uprice(l.p,l.qty)*l.qty;items+=l.qty}
   const r=cfg.ppn_enabled?Number(cfg.ppn_rate):0;
   const tax=cfg.ppn_inclusive?gross*r/(100+r):gross*r/100;
   const rt=x=>Math.round(x*100)/100;
@@ -249,7 +251,7 @@ function calc(){
 function drawCart(){
   $('#cart').innerHTML=cart.length?cart.map((l,i)=>`<tr class="${i===sel?'sel':''}" data-i="${i}"><td class="num" style="text-align:left">${esc(l.p.sku)}</td><td>${esc(l.p.name)}</td>
     <td class="num"><span class="qty"><button data-d="-1" aria-label="Kurangi">−</button><span>${nf(l.qty)}</span><button data-d="1" aria-label="Tambah">+</button></span></td>
-    <td class="num">${rp(l.p.base_price)}</td><td class="num">${rp(Number(l.p.base_price)*l.qty)}</td></tr>`).join(''):`<tr><td colspan="5" class="muted" style="text-align:center;padding:32px">Keranjang kosong. Scan atau cari produk untuk memulai.</td></tr>`;
+    <td class="num">${rp(uprice(l.p,l.qty))}</td><td class="num">${rp(uprice(l.p,l.qty)*l.qty)}</td></tr>`).join(''):`<tr><td colspan="5" class="muted" style="text-align:center;padding:32px">Keranjang kosong. Scan atau cari produk untuk memulai.</td></tr>`;
   $('#cart').onclick=e=>{const tr=e.target.closest('tr[data-i]');if(!tr)return;sel=Number(tr.dataset.i);const d=e.target.closest('[data-d]');if(d)chg(sel,Number(d.dataset.d));else drawCart()};
   const c=calc();
   $('#s-items').textContent=nf(c.items);$('#s-sub').textContent=rp(c.sub);$('#s-tax').textContent=rp(c.tax);
@@ -477,6 +479,47 @@ async function renderStock(){
     };
   };
   $('#q').addEventListener('input',debounce(load,250));if($('#st'))$('#st').onchange=load;load();
+}
+
+/* ---------- Admin: Daftar Harga ---------- */
+async function renderPriceLists(){
+  const owner=me.role==='owner';let data=await api('/admin/price-lists'),cur=null;
+  const draw=()=>{
+    $('#view').innerHTML=`<main class="page"><div class="grid2"><div>
+      <div class="toolbar"><h3 style="margin:0">Daftar harga</h3>${owner?'<button class="btn primary" id="new">Tambah</button>':''}</div>
+      <table><thead><tr><th>Kode</th><th>Nama</th><th>Berlaku</th><th class="num">Item</th><th></th></tr></thead><tbody>${data.lists.map(l=>`<tr><td class="num" style="text-align:left">${esc(l.code)}</td><td>${esc(l.name)}${l.is_active?'':' <span class="muted">(nonaktif)</span>'}</td><td class="muted">${l.effective_from||'-'} s/d ${l.effective_until||'-'}</td><td class="num">${l.items}</td>
+        <td><button class="btn" data-o="${l.id}" style="height:28px">Buka</button>${owner?` <button class="btn" data-e="${l.id}" style="height:28px">Ubah</button>`:''}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">Belum ada daftar harga.</td></tr>'}</tbody></table>
+      <h3 style="margin:20px 0 8px">Daftar harga per gerai</h3>
+      <table><tbody>${data.stores.map(st=>`<tr><td>${esc(st.store)}</td><td><select data-s="${st.store_id}" ${owner?'':'disabled'}><option value="">(harga dasar produk)</option>${data.lists.filter(l=>l.is_active).map(l=>`<option value="${l.id}" ${l.id===st.price_list_id?'selected':''}>${esc(l.code)} - ${esc(l.name)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>
+      <div id="items"></div></div></main>`;
+    $('#new')&&($('#new').onclick=()=>listForm(null));
+    document.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>listForm(data.lists.find(l=>l.id===b.dataset.e)));
+    document.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>{cur=data.lists.find(l=>l.id===b.dataset.o);drawItems()});
+    document.querySelectorAll('[data-s]').forEach(sel=>sel.onchange=async()=>{try{await api('/admin/stores/'+sel.dataset.s+'/price-list',{method:'PUT',body:{price_list_id:sel.value}});toast('Daftar harga gerai disimpan')}catch(x){toast(x.message,true);reload()}});
+    if(cur)drawItems();
+  };
+  const reload=async()=>{data=await api('/admin/price-lists');draw()};
+  function listForm(l){
+    const d=openDlg(`<h2>${l?'Ubah':'Tambah'} daftar harga</h2><div class="row"><div><label>Kode</label><input id="c" value="${esc(l?.code)}" style="width:100%"></div><div><label>Nama</label><input id="n" value="${esc(l?.name)}" style="width:100%"></div></div>
+      <div class="row"><div><label>Berlaku dari</label><input type="date" id="f" value="${l?.effective_from||''}" style="width:100%"></div><div><label>Berlaku sampai</label><input type="date" id="t" value="${l?.effective_until||''}" style="width:100%"></div></div>
+      <label><input type="checkbox" id="a" ${!l||l.is_active?'checked':''}> Aktif</label><div class="err" id="e" hidden></div><div class="actions"><button class="btn" id="x">Batal</button><button class="btn primary" id="s">Simpan</button></div>`);
+    $('#x',d).onclick=closeDlg;
+    $('#s',d).onclick=async()=>{try{await api(l?'/admin/price-lists/'+l.id:'/admin/price-lists',{method:l?'PUT':'POST',body:{code:$('#c',d).value,name:$('#n',d).value,effective_from:$('#f',d).value||null,effective_until:$('#t',d).value||null,is_active:$('#a',d).checked}});closeDlg();toast('Tersimpan');reload()}catch(x){$('#e',d).textContent=x.message;$('#e',d).hidden=false}};
+  }
+  async function drawItems(){
+    const items=await api('/admin/price-lists/'+cur.id+'/items');
+    $('#items').innerHTML=`<h3 style="margin:0 0 8px">Harga: ${esc(cur.name)}</h3>
+      ${owner?`<div class="toolbar"><input id="pq" placeholder="Cari produk (SKU / nama)" style="min-width:200px"><select id="pp" style="min-width:200px"></select><input id="pm" class="num" inputmode="decimal" placeholder="Min. qty" value="1" style="width:80px"><input id="pr" class="num" inputmode="decimal" placeholder="Harga" style="width:110px"><button class="btn primary" id="pa">Simpan harga</button></div>`:''}
+      <table><thead><tr><th>SKU</th><th>Produk</th><th class="num">Min. qty</th><th class="num">Harga dasar</th><th class="num">Harga</th><th></th></tr></thead><tbody>${items.map(i=>`<tr><td class="num" style="text-align:left">${esc(i.sku)}</td><td>${esc(i.name)}</td><td class="num">${nf(i.min_qty)}</td><td class="num">${rp(i.base_price)}</td><td class="num">${rp(i.price)}</td>
+        <td>${owner?`<button class="btn" data-d="${i.product_id}|${i.min_qty}" style="height:28px">Hapus</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6" class="muted">Belum ada harga. Produk tanpa harga di daftar ini memakai harga dasar.</td></tr>'}</tbody></table>`;
+    if(!owner)return;
+    const fill=async()=>{const l=await api('/admin/products?q='+encodeURIComponent($('#pq').value));$('#pp').innerHTML=l.slice(0,50).map(p=>`<option value="${p.id}">${esc(p.sku)} - ${esc(p.name)}</option>`).join('')};
+    $('#pq').addEventListener('input',debounce(fill,250));fill();
+    const put=async(product_id,min_qty,price)=>{try{await api('/admin/price-lists/'+cur.id+'/items',{method:'PUT',body:{product_id,min_qty,price}});data=await api('/admin/price-lists');cur=data.lists.find(l=>l.id===cur.id);draw()}catch(x){toast(x.message,true)}};
+    $('#pa').onclick=()=>put($('#pp').value,$('#pm').value,$('#pr').value);
+    $('#items').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const[pid,mq]=b.dataset.d.split('|');put(pid,mq,'')});
+  }
+  draw();
 }
 
 /* ---------- Admin: Laporan ---------- */

@@ -14,6 +14,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/jfebiyanto/easyPOS-Go/internal/audit"
+	"github.com/jfebiyanto/easyPOS-Go/internal/catalog"
 	"github.com/jfebiyanto/easyPOS-Go/internal/inventory"
 	"github.com/jfebiyanto/easyPOS-Go/internal/loyalty"
 	"github.com/jfebiyanto/easyPOS-Go/internal/numbering"
@@ -191,6 +192,9 @@ func (s *Service) checkoutTx(ctx context.Context, c Cashier, in CheckoutInput) (
 			return nil, ErrInvalid
 		}
 		if err != nil {
+			return nil, err
+		}
+		if price, err = catalog.UnitPrice(ctx, tx, c.StoreID, id, numbering.BusinessDate(s.now()), p.qty, price); err != nil {
 			return nil, err
 		}
 		p.price, _ = decimal.NewFromString(price)

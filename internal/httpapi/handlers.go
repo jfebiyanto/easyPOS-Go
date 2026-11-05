@@ -75,6 +75,9 @@ func (s *Server) mountPOS(r chi.Router) {
 	r.Get("/products", func(w http.ResponseWriter, r *http.Request) {
 		u := CurrentUser(r.Context())
 		list, err := s.catalog.List(r.Context(), u.CompanyID, r.URL.Query().Get("q"), true, *u.StoreID)
+		if err == nil {
+			err = s.catalog.WithTiers(r.Context(), *u.StoreID, numbering.BusinessDate(time.Now()), list)
+		}
 		if err != nil {
 			fail(w, err)
 			return
@@ -225,6 +228,7 @@ func (s *Server) putBrandColor(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) mountAdmin(r chi.Router) {
 	r.With(RequireRole(identity.RoleOwner)).Put("/settings/brand-color", s.putBrandColor)
+	s.mountPriceLists(r)
 	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"pong": "ok"})
 	})
@@ -414,4 +418,56 @@ func respond(w http.ResponseWriter, v any, err error, code int) {
 		return
 	}
 	writeJSON(w, code, v)
+}
+
+// mountPriceLists: everyone in the admin area can read; only the Owner changes lists and store assignment (FR-A7-04).
+func (s *Server) mountPriceLists(r chi.Router) {
+	owner := RequireRole(identity.RoleOwner)
+	r.Get("/price-lists", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		lists, err := s.catalog.PriceLists(r.Context(), u.CompanyID)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		stores, err := s.catalog.StorePriceLists(r.Context(), u.CompanyID)
+		respond(w, map[string]any{"lists": lists, "stores": stores}, err, http.StatusOK)
+	})
+	save := func(id func(*http.Request) string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			u := CurrentUser(r.Context())
+			var in catalog.PriceListInput
+			if !decode(w, r, &in) {
+				return
+			}
+			got, err := s.catalog.SavePriceList(r.Context(), actorOf(u), u.CompanyID, id(r), in)
+			respond(w, map[string]string{"id": got}, err, http.StatusOK)
+		}
+	}
+	r.With(owner).Post("/price-lists", save(func(*http.Request) string { return "" }))
+	r.With(owner).Put("/price-lists/{id}", save(func(r *http.Request) string { return chi.URLParam(r, "id") }))
+	r.Get("/price-lists/{id}/items", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.catalog.PriceItems(r.Context(), CurrentUser(r.Context()).CompanyID, chi.URLParam(r, "id"))
+		respond(w, list, err, http.StatusOK)
+	})
+	r.With(owner).Put("/price-lists/{id}/items", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		var in catalog.PriceItemInput
+		if !decode(w, r, &in) {
+			return
+		}
+		err := s.catalog.SetPriceItem(r.Context(), actorOf(u), u.CompanyID, chi.URLParam(r, "id"), in)
+		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
+	})
+	r.With(owner).Put("/stores/{id}/price-list", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		var in struct {
+			PriceListID string `json:"price_list_id"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		err := s.catalog.AssignStorePriceList(r.Context(), actorOf(u), u.CompanyID, chi.URLParam(r, "id"), in.PriceListID)
+		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
+	})
 }
