@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/jfebiyanto/easyPOS-Go/internal/demo"
 	"github.com/jfebiyanto/easyPOS-Go/internal/httpapi"
 	"github.com/jfebiyanto/easyPOS-Go/internal/platform/config"
 	"github.com/jfebiyanto/easyPOS-Go/internal/platform/database"
@@ -24,7 +25,7 @@ func main() {
 	slog.SetDefault(log)
 
 	root := &cobra.Command{Use: "easypos", SilenceUsage: true}
-	root.AddCommand(serveCmd(), migrateCmd(), healthcheckCmd())
+	root.AddCommand(serveCmd(), migrateCmd(), seedDemoCmd(), healthcheckCmd())
 	if err := root.Execute(); err != nil {
 		log.Error("fatal", "err", err)
 		os.Exit(1)
@@ -104,6 +105,25 @@ func healthcheckCmd() *cobra.Command {
 		if resp.StatusCode != http.StatusOK {
 			return errors.New("unhealthy")
 		}
+		return nil
+	}}
+}
+
+func seedDemoCmd() *cobra.Command {
+	return &cobra.Command{Use: "seed-demo", Short: "Load sample store, users, and products", RunE: func(cmd *cobra.Command, _ []string) error {
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+		pool, err := database.Open(cmd.Context(), cfg.DatabaseURL)
+		if err != nil {
+			return err
+		}
+		defer pool.Close()
+		if err := demo.Seed(cmd.Context(), pool); err != nil {
+			return err
+		}
+		slog.Info("demo data loaded", "users", "manager, kasir", "password", demo.Password)
 		return nil
 	}}
 }

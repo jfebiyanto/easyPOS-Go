@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # One-command setup/update for an Ubuntu VPS.
 #   First run : ./deploy/install.sh            (optional: EASYPOS_DOMAIN=pos.contoh.com ./deploy/install.sh)
+#   With demo : DEMO=1 ./deploy/install.sh   (adds sample store, users, products)
 #   Update    : git pull && ./deploy/install.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -44,6 +45,11 @@ for i in $(seq 1 40); do
   sleep 3
 done
 [ "${OK:-0}" = 1 ] || { echo "App did not become healthy. Check: $DC logs app"; exit 1; }
+
+if [ "${DEMO:-0}" = 1 ]; then
+  echo ">> Loading demo data (store, users manager/kasir, 14 products)..."
+  $DC exec -T app /easypos seed-demo || echo "(demo data skipped: already loaded?)"
+fi
 
 HOST="$(grep -E '^EASYPOS_DOMAIN=' .env | cut -d= -f2 || true)"
 if [ -n "$HOST" ]; then URL="https://$HOST"; else URL="http://$(curl -fsS https://api.ipify.org 2>/dev/null || hostname -I | awk '{print $1}')"; fi

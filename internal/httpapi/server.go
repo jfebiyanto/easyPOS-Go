@@ -17,12 +17,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/jfebiyanto/easyPOS-Go/internal/audit"
+	"github.com/jfebiyanto/easyPOS-Go/internal/catalog"
 	"github.com/jfebiyanto/easyPOS-Go/internal/identity"
+	"github.com/jfebiyanto/easyPOS-Go/internal/reporting"
+	"github.com/jfebiyanto/easyPOS-Go/internal/sales"
 )
 
 type Server struct {
 	pool     *pgxpool.Pool
 	identity *identity.Service
+	catalog  *catalog.Service
+	sales    *sales.Service
+	reports  *reporting.Service
 	sessions *scs.SessionManager
 	web      fs.FS
 }
@@ -35,7 +41,8 @@ func New(pool *pgxpool.Pool, secureCookies bool, web fs.FS) *Server {
 	sm.Cookie.HttpOnly = true
 	sm.Cookie.Secure = secureCookies
 	sm.Cookie.SameSite = http.SameSiteLaxMode
-	return &Server{pool: pool, identity: identity.NewService(pool), sessions: sm, web: web}
+	return &Server{pool: pool, identity: identity.NewService(pool), catalog: catalog.NewService(pool),
+		sales: sales.NewService(pool), reports: reporting.NewService(pool), sessions: sm, web: web}
 }
 
 func (s *Server) Identity() *identity.Service { return s.identity }
@@ -65,9 +72,12 @@ func (s *Server) Handler() http.Handler {
 			// Admin area: cashiers are rejected server-side (FR-A1-03).
 			r.Route("/admin", func(r chi.Router) {
 				r.Use(RequireRole(identity.RoleOwner, identity.RoleStoreManager))
-				r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
-					writeJSON(w, http.StatusOK, map[string]string{"pong": "ok"})
-				})
+				s.mountAdmin(r)
+			})
+			// POS: Owner has no store, so staff roles only; stores are enforced by requireStore.
+			r.Route("/pos", func(r chi.Router) {
+				r.Use(RequireRole(identity.RoleCashier, identity.RoleStoreManager))
+				s.mountPOS(r)
 			})
 		})
 	})

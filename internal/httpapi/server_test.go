@@ -34,7 +34,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err := database.Migrate(pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `TRUNCATE sessions, activity_logs, users, stores, companies CASCADE`); err != nil {
+	if _, err := pool.Exec(ctx, `TRUNCATE sessions, activity_logs, sale_payments, sale_lines, sales, stock_ledger, store_stocks, numbering_configs, payment_types, products, product_groups, units, users, stores, companies CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	return pool
@@ -218,4 +218,14 @@ func TestSPAFallback(t *testing.T) {
 	if rec.Code != 200 || !strings.Contains(rec.Body.String(), "spa") {
 		t.Fatalf("spa fallback = %d %q", rec.Code, rec.Body.String())
 	}
+}
+
+func (f fixture) postJSON(path string, cookies []*http.Cookie, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest("POST", path, strings.NewReader(body))
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	rec := httptest.NewRecorder()
+	f.srv.ServeHTTP(rec, req)
+	return rec
 }
