@@ -491,7 +491,20 @@ async function renderReport(){
       <div class="kpi"><small>Item terjual</small><div>${nf(r.totals.items)}</div></div><div class="kpi"><small>Rata-rata belanja</small><div>${rp(r.totals.avg_basket)}</div></div><div class="kpi"><small>PPN</small><div>${rp(r.totals.tax)}</div></div>
       <div class="kpi"><small>Retur (${r.totals.returns}x)</small><div>${rp(r.totals.return_total)}</div></div><div class="kpi"><small>Omzet bersih</small><div>${rp(r.totals.net_revenue)}</div></div></div>
       <div class="grid2"><div><h3 style="margin:0 0 8px">Per hari</h3><table><thead><tr><th>Tanggal</th><th class="num">Transaksi</th><th class="num">Omzet</th></tr></thead><tbody>${r.daily.map(d=>`<tr><td>${d.date}</td><td class="num">${d.transactions}</td><td class="num">${rp(d.revenue)}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">Tidak ada transaksi.</td></tr>'}</tbody></table></div>
-      <div><h3 style="margin:0 0 8px">Produk terlaris</h3><table><thead><tr><th>Produk</th><th class="num">Qty</th><th class="num">Omzet</th></tr></thead><tbody>${r.top_products.map(p=>`<tr><td>${esc(p.name)}</td><td class="num">${nf(p.qty)}</td><td class="num">${rp(p.revenue)}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">Tidak ada data.</td></tr>'}</tbody></table></div></div>`;
+      <div><h3 style="margin:0 0 8px">Produk terlaris</h3><table><thead><tr><th>Produk</th><th class="num">Qty</th><th class="num">Omzet</th></tr></thead><tbody>${r.top_products.map(p=>`<tr><td>${esc(p.name)}</td><td class="num">${nf(p.qty)}</td><td class="num">${rp(p.revenue)}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">Tidak ada data.</td></tr>'}</tbody></table></div></div>
+      <h3 style="margin:20px 0 8px">Transaksi</h3><div id="txl"></div>`;
+    loadTx();
+  };
+  const loadTx=async()=>{
+    const list=await api(`/admin/sales?from=${$('#f').value}&to=${$('#t').value}&store_id=${$('#st')?.value||''}`);
+    $('#txl').innerHTML=`<table><thead><tr><th>No. struk</th><th>Waktu</th><th>Gerai</th><th>Kasir</th><th>Pelanggan</th><th class="num">Total</th><th>Status</th><th></th></tr></thead><tbody>${list.map(x=>`<tr><td class="num" style="text-align:left">${esc(x.number)}</td><td>${new Date(x.sold_at).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',dateStyle:'short',timeStyle:'short'})}</td><td>${esc(x.store)}</td><td>${esc(x.cashier)}</td><td>${esc(x.customer)}</td><td class="num">${rp(x.total)}</td>
+      <td>${x.status==='void'?`<span class="muted" title="${esc(x.void_reason)}">Void · ${esc(x.void_reason)}</span>`:'Selesai'}</td><td>${x.can_void?`<button class="btn" data-v="${esc(x.number)}" style="height:28px">Void</button>`:''}</td></tr>`).join('')||'<tr><td colspan="8" class="muted">Tidak ada transaksi.</td></tr>'}</tbody></table>`;
+    $('#txl').onclick=e=>{const n=e.target.dataset.v;if(!n)return;
+      const d=openDlg(`<h2>Void transaksi ${esc(n)}</h2><p class="muted">Stok dikembalikan dan poin member ditarik kembali. Hanya bisa pada hari transaksi dan jika belum ada retur.</p><label>Alasan</label><input id="rs" style="width:100%">
+        <div class="err" id="e" hidden></div><div class="actions"><button class="btn" id="x">Batal</button><button class="btn primary" id="s">Void</button></div>`);
+      $('#x',d).onclick=closeDlg;
+      $('#s',d).onclick=async()=>{try{await api('/admin/sales/'+encodeURIComponent(n)+'/void',{method:'POST',body:{reason:$('#rs',d).value}});closeDlg();toast('Transaksi di-void');load()}catch(x){$('#e',d).textContent=x.message;$('#e',d).hidden=false}};
+    };
   };
   $('#go').onclick=()=>load().catch(x=>toast(x.message,true));load();
 }

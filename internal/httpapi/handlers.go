@@ -34,7 +34,8 @@ func fail(w http.ResponseWriter, err error) {
 	switch {
 	case errors.Is(err, catalog.ErrInvalid), errors.Is(err, sales.ErrInvalid), errors.Is(err, sales.ErrUnderpaid),
 		errors.Is(err, loyalty.ErrInvalid), errors.Is(err, returns.ErrInvalid), errors.Is(err, returns.ErrWindow),
-		errors.Is(err, returns.ErrVoided), errors.Is(err, returns.ErrOverReturn):
+		errors.Is(err, returns.ErrVoided), errors.Is(err, returns.ErrOverReturn),
+		errors.Is(err, sales.ErrAlreadyVoid), errors.Is(err, sales.ErrHasReturns), errors.Is(err, sales.ErrVoidDay):
 		writeErr(w, http.StatusUnprocessableEntity, err.Error())
 	case errors.Is(err, catalog.ErrDuplicate), errors.Is(err, sales.ErrInsufficientStock), errors.Is(err, loyalty.ErrDuplicatePhone):
 		writeErr(w, http.StatusConflict, err.Error())
@@ -343,27 +344,52 @@ func (s *Server) mountAdmin(r chi.Router) {
 		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
 	})
 
-	r.Get("/reports/sales", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/sales", func(w http.ResponseWriter, r *http.Request) {
 		u := CurrentUser(r.Context())
-		today := numbering.BusinessDate(time.Now())
-		from, to := r.URL.Query().Get("from"), r.URL.Query().Get("to")
-		if from == "" {
-			from = today
-		}
-		if to == "" {
-			to = today
-		}
-		if _, err := time.Parse("2006-01-02", from); err != nil {
-			writeErr(w, http.StatusUnprocessableEntity, "format tanggal harus YYYY-MM-DD")
+		from, to, ok := dateRange(w, r)
+		if !ok {
 			return
 		}
-		if _, err := time.Parse("2006-01-02", to); err != nil {
-			writeErr(w, http.StatusUnprocessableEntity, "format tanggal harus YYYY-MM-DD")
+		list, err := s.sales.List(r.Context(), u.CompanyID, storeScope(r), from, to)
+		respond(w, list, err, http.StatusOK)
+	})
+	r.Post("/sales/{number}/void", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		var in struct{ Reason string }
+		if !decode(w, r, &in) {
+			return
+		}
+		err := s.sales.Void(r.Context(), actorOf(u), u.CompanyID, scopeFor(u), chi.URLParam(r, "number"), in.Reason)
+		respond(w, map[string]string{"status": "void"}, err, http.StatusOK)
+	})
+	r.Get("/reports/sales", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		from, to, ok := dateRange(w, r)
+		if !ok {
 			return
 		}
 		sum, err := s.reports.Sales(r.Context(), u.CompanyID, storeScope(r), from, to)
 		respond(w, sum, err, http.StatusOK)
 	})
+}
+
+// dateRange reads ?from&to (YYYY-MM-DD), defaulting both to today in Jakarta.
+func dateRange(w http.ResponseWriter, r *http.Request) (from, to string, ok bool) {
+	today := numbering.BusinessDate(time.Now())
+	from, to = r.URL.Query().Get("from"), r.URL.Query().Get("to")
+	if from == "" {
+		from = today
+	}
+	if to == "" {
+		to = today
+	}
+	for _, d := range []string{from, to} {
+		if _, err := time.Parse("2006-01-02", d); err != nil {
+			writeErr(w, http.StatusUnprocessableEntity, "format tanggal harus YYYY-MM-DD")
+			return "", "", false
+		}
+	}
+	return from, to, true
 }
 
 func scopeFor(u *identity.User) string {

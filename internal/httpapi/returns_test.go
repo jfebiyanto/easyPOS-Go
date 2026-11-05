@@ -201,7 +201,7 @@ func TestReturnRulesWindowVoidIdempotencyStore(t *testing.T) {
 	if _, err := p.returns.Create(ctx, p.actor(), p.ret(s.Number, "x", returns.LineInput{LineID: line, Qty: "1"})); !errors.Is(err, returns.ErrWindow) {
 		t.Fatalf("outside window: %v", err)
 	}
-	if _, err := p.pool.Exec(ctx, `UPDATE sales SET sold_at=now(), status='void' WHERE id=$1`, s.ID); err != nil {
+	if _, err := p.pool.Exec(ctx, `UPDATE sales SET sold_at=now(), status='void', void_reason='t', voided_by=cashier_id, voided_at=now() WHERE id=$1`, s.ID); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := p.returns.Create(ctx, p.actor(), p.ret(s.Number, "x", returns.LineInput{LineID: line, Qty: "1"})); !errors.Is(err, returns.ErrVoided) {

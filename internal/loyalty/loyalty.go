@@ -275,3 +275,12 @@ func (s *Service) Adjust(ctx context.Context, a audit.Actor, companyID, id strin
 	}
 	return tx.Commit(ctx)
 }
+
+// ReverseVoid takes back the points earned by a sale that was voided.
+func ReverseVoid(ctx context.Context, tx pgx.Tx, customerID, saleID, number, actorID string, points int) (int, error) {
+	if points <= 0 {
+		return 0, nil
+	}
+	n, err := move(ctx, tx, customerID, "void", -points, "sale", saleID, number, actorID)
+	return -n, err
+}
