@@ -17,7 +17,7 @@ button{font:inherit;cursor:pointer}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.lg{height:48px;font-size:16px;font-weight:600}
 input,select{height:36px;padding:0 10px;border:1px solid var(--outline);border-radius:6px;font:inherit;background:var(--surface);color:var(--text);max-width:100%}
-input:focus,select:focus,button:focus-visible{outline:3px solid rgba(30,58,95,.35);border-color:var(--primary)}
+input:focus,select:focus,button:focus-visible{outline:3px solid var(--ring,rgba(30,58,95,.35));border-color:var(--primary)}
 label{display:block;font-size:13px;font-weight:500;margin:10px 0 4px}
 [hidden]{display:none!important}
 .center{min-height:100vh;display:grid;place-items:center;padding:16px}
@@ -123,11 +123,13 @@ $('#login-form').addEventListener('submit',async e=>{
 $('#logout').addEventListener('click',async()=>{await fetch('/api/auth/logout',{method:'POST'});showLogin()});
 const roleName={owner:'Owner',store_manager:'Store Manager',cashier:'Kasir'};
 function startApp(){
+  applyBrand(me.brand_color);
   $('#login-view').hidden=true;$('#app').hidden=false;
   $('#who').textContent=me.name+' · '+roleName[me.role];
   const tabs=[];
   if(me.role!=='owner')tabs.push(['pos','Kasir (POS)']);
   if(me.role!=='cashier')tabs.push(['products','Produk'],['stock','Stok'],['customers','Pelanggan'],['report','Laporan']);
+  if(me.role==='owner')tabs.push(['settings','Pengaturan']);
   $('#nav').innerHTML=tabs.map(([k,l])=>`<button class="tab" role="tab" data-k="${k}">${l}</button>`).join('');
   $('#nav').onclick=e=>{const k=e.target.dataset.k;if(k)go(k)};
   go(tabs[0][0]);
@@ -135,9 +137,45 @@ function startApp(){
 function go(k){
   screen=k;detachPos();
   document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-selected',t.dataset.k===k));
-  ({pos:renderPOS,products:renderProducts,stock:renderStock,customers:renderCustomers,report:renderReport})[k]();
+  ({pos:renderPOS,products:renderProducts,stock:renderStock,customers:renderCustomers,report:renderReport,settings:renderSettings})[k]();
 }
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('id-ID',{timeZone:'Asia/Jakarta',dateStyle:'medium',timeStyle:'short'})},1000);
+
+/* ---------- Tema (warna kustom Owner) ---------- */
+const DEFAULT_BRAND='#1E3A5F';
+const BRAND_PRESETS=[['Navy','#1E3A5F'],['Biru','#1D4ED8'],['Teal','#0F766E'],['Ungu','#6D28D9'],['Merah marun','#9F1239'],['Abu gelap','#374151']];
+function mixHex(h,t,a){const n=x=>parseInt(h.slice(x,x+2),16),m=x=>Math.round(n(x)+(t-n(x))*a);return '#'+[1,3,5].map(i=>m(i).toString(16).padStart(2,'0')).join('')}
+function lum(h){const c=[1,3,5].map(i=>{const v=parseInt(h.slice(i,i+2),16)/255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]}
+function applyBrand(hex){
+  if(!/^#[0-9a-f]{6}$/i.test(hex))hex=DEFAULT_BRAND;
+  /* Warna terlalu terang tidak terbaca dengan teks putih: gelapkan sampai kontras >= 4.5 */
+  let p=hex,i=0;while(1.05/(lum(p)+.05)<4.5&&i++<20)p=mixHex(p,0,.1);
+  const r=document.documentElement.style;
+  r.setProperty('--primary',p);r.setProperty('--primary-hover',mixHex(p,0,.25));
+  r.setProperty('--primary-c',mixHex(p,255,.85));r.setProperty('--on-primary-c',mixHex(p,0,.7));
+  r.setProperty('--ok',mixHex(p,0,.7));r.setProperty('--ok-bg',mixHex(p,255,.85));
+  r.setProperty('--ring',p+'59');
+  try{localStorage.setItem('brand',hex)}catch{}
+}
+try{applyBrand(localStorage.getItem('brand')||DEFAULT_BRAND)}catch{applyBrand(DEFAULT_BRAND)}
+async function renderSettings(){
+  let cur=me.brand_color;
+  $('#view').innerHTML=`<main class="page"><div class="card" style="padding:16px;max-width:520px"><h2 style="margin:0 0 4px">Warna aplikasi</h2>
+    <p class="muted" style="margin:0 0 12px">Berlaku untuk semua pengguna perusahaan Anda.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${BRAND_PRESETS.map(([n,c])=>`<button class="btn" type="button" data-c="${c}" title="${n}" style="gap:6px"><span style="display:inline-block;width:16px;height:16px;border-radius:4px;background:${c}"></span>${n}</button>`).join('')}</div>
+    <label for="bc">Warna kustom</label><div style="display:flex;gap:8px;align-items:center"><input type="color" id="bc" value="${cur}" style="width:56px;height:40px;padding:2px"><input id="bh" value="${cur}" maxlength="7" style="width:110px;font-family:var(--mono)"></div>
+    <div class="muted" id="berr" hidden style="color:var(--danger);margin-top:6px"></div>
+    <div style="margin-top:16px;display:flex;gap:8px"><button class="btn primary" id="bs" type="button">Simpan</button><button class="btn" id="br" type="button">Kembalikan ke default</button></div></div></main>`;
+  const pick=c=>{$('#bc').value=c;$('#bh').value=c.toUpperCase();applyBrand(c)};
+  document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>pick(b.dataset.c));
+  $('#bc').oninput=e=>pick(e.target.value);
+  $('#bh').oninput=e=>{if(/^#[0-9a-f]{6}$/i.test(e.target.value)){$('#bc').value=e.target.value;applyBrand(e.target.value)}};
+  $('#br').onclick=()=>pick(DEFAULT_BRAND);
+  $('#bs').onclick=async()=>{
+    try{const r=await api('/admin/settings/brand-color',{method:'PUT',body:{brand_color:$('#bh').value}});me.brand_color=r.brand_color;cur=r.brand_color;applyBrand(cur);$('#berr').hidden=true;toast('Warna disimpan')}
+    catch(x){$('#berr').textContent=x.message;$('#berr').hidden=false}
+  };
+}
 
 /* ---------- POS ---------- */
 let cart=[],sel=0,products=[],payTypes=[],busy=false,customer=null;

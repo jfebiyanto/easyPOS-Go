@@ -137,10 +137,14 @@ type userDTO struct {
 	User    string  `json:"username"`
 	Role    string  `json:"role"`
 	StoreID *string `json:"store_id"`
+	// BrandColor is the company's UI accent color (#RRGGBB), applied by the frontend theme.
+	BrandColor string `json:"brand_color"`
 }
 
-func toDTO(u *identity.User) userDTO {
-	return userDTO{ID: u.ID, Name: u.Name, User: u.Username, Role: u.Role, StoreID: u.StoreID}
+func (s *Server) toDTO(ctx context.Context, u *identity.User) userDTO {
+	color := defaultBrandColor
+	_ = s.pool.QueryRow(ctx, `SELECT brand_color FROM companies WHERE id=$1`, u.CompanyID).Scan(&color)
+	return userDTO{ID: u.ID, Name: u.Name, User: u.Username, Role: u.Role, StoreID: u.StoreID, BrandColor: color}
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -164,7 +168,7 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	s.sessions.Put(r.Context(), "user_id", u.ID)
 	s.auditLogin(r.Context(), u)
-	writeJSON(w, http.StatusOK, toDTO(u))
+	writeJSON(w, http.StatusOK, s.toDTO(r.Context(), u))
 }
 
 func (s *Server) auditLogin(ctx context.Context, u *identity.User) {
@@ -185,7 +189,7 @@ func (s *Server) logout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) me(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, toDTO(CurrentUser(r.Context())))
+	writeJSON(w, http.StatusOK, s.toDTO(r.Context(), CurrentUser(r.Context())))
 }
 
 // spa serves the embedded frontend, falling back to index.html for client routes.

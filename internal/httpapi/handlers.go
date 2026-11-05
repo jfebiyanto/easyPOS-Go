@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -166,7 +168,54 @@ func (s *Server) mountPOS(r chi.Router) {
 	})
 }
 
+const defaultBrandColor = "#1E3A5F"
+
+var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+
+// putBrandColor lets the Owner customise the UI accent color for the whole company.
+func (s *Server) putBrandColor(w http.ResponseWriter, r *http.Request) {
+	u := CurrentUser(r.Context())
+	var in struct {
+		BrandColor string `json:"brand_color"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	color := strings.ToUpper(strings.TrimSpace(in.BrandColor))
+	if !hexColor.MatchString(color) {
+		writeErr(w, http.StatusUnprocessableEntity, "warna harus berformat #RRGGBB")
+		return
+	}
+	tx, err := s.pool.Begin(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var old string
+	if err := tx.QueryRow(r.Context(), `SELECT brand_color FROM companies WHERE id=$1 FOR UPDATE`, u.CompanyID).Scan(&old); err != nil {
+		fail(w, err)
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `UPDATE companies SET brand_color=$2 WHERE id=$1`, u.CompanyID, color); err != nil {
+		fail(w, err)
+		return
+	}
+	if err := audit.Record(r.Context(), tx, audit.Entry{CompanyID: u.CompanyID, Actor: actorOf(u), Action: "settings.brand_color",
+		SubjectType: "company", SubjectID: u.CompanyID, Description: "Ubah warna tema",
+		Properties: map[string]any{"from": old, "to": color}}); err != nil {
+		fail(w, err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"brand_color": color})
+}
+
 func (s *Server) mountAdmin(r chi.Router) {
+	r.With(RequireRole(identity.RoleOwner)).Put("/settings/brand-color", s.putBrandColor)
 	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"pong": "ok"})
 	})
