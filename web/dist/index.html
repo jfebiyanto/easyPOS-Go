@@ -484,7 +484,7 @@ async function renderReport(){
   const stores=me.role==='owner'?await api('/admin/stores'):[];
   const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Jakarta'});
   $('#view').innerHTML=`<main class="page"><div class="toolbar"><label style="margin:0">Dari</label><input type="date" id="f" value="${today}"><label style="margin:0">Sampai</label><input type="date" id="t" value="${today}">
-    ${me.role==='owner'?`<select id="st"><option value="">Semua gerai</option>${stores.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>`:''}<button class="btn primary" id="go">Tampilkan</button></div><div id="out"></div></main>`;
+    ${me.role==='owner'?`<select id="st"><option value="">Semua gerai</option>${stores.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>`:''}<button class="btn primary" id="go">Tampilkan</button><button class="btn" id="xl" type="button">Unduh Excel</button></div><div id="out"></div></main>`;
   const load=async()=>{
     const r=await api(`/admin/reports/sales?from=${$('#f').value}&to=${$('#t').value}&store_id=${$('#st')?.value||''}`);
     $('#out').innerHTML=`<div class="kpis"><div class="kpi"><small>Omzet</small><div>${rp(r.totals.revenue)}</div></div><div class="kpi"><small>Transaksi</small><div>${r.totals.transactions}</div></div>
@@ -506,6 +506,7 @@ async function renderReport(){
       $('#s',d).onclick=async()=>{try{await api('/admin/sales/'+encodeURIComponent(n)+'/void',{method:'POST',body:{reason:$('#rs',d).value}});closeDlg();toast('Transaksi di-void');load()}catch(x){$('#e',d).textContent=x.message;$('#e',d).hidden=false}};
     };
   };
+  $('#xl').onclick=()=>{location.href=`/api/admin/reports/sales.xlsx?from=${$('#f').value}&to=${$('#t').value}&store_id=${$('#st')?.value||''}`};
   $('#go').onclick=()=>load().catch(x=>toast(x.message,true));load();
 }
 window.addEventListener('beforeunload',e=>{if(screen==='pos'&&cart.length){e.preventDefault();e.returnValue=''}});

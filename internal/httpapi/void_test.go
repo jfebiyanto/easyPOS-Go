@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/xuri/excelize/v2"
+
 	"github.com/jfebiyanto/easyPOS-Go/internal/audit"
 	"github.com/jfebiyanto/easyPOS-Go/internal/returns"
 	"github.com/jfebiyanto/easyPOS-Go/internal/sales"
@@ -107,5 +109,42 @@ func TestVoidRoutesAndList(t *testing.T) {
 	}
 	if list := p.get("/api/admin/sales", mgr); !strings.Contains(list.Body.String(), `"status":"void"`) || strings.Contains(list.Body.String(), `"can_void":true`) {
 		t.Fatalf("list after void: %s", list.Body)
+	}
+}
+
+func TestExcelExport(t *testing.T) {
+	p := setupPOS(t)
+	prod := p.product(t, "X1", "10000", "10")
+	p.sell(t, "", prod, "3", "30000")
+	p.mk(t, "mgr", "store_manager")
+	if _, err := p.pool.Exec(context.Background(), `UPDATE users SET store_id=$1 WHERE username='mgr'`, p.storeID); err != nil {
+		t.Fatal(err)
+	}
+	_, mgr := p.login(t, "mgr", "secret-pass")
+	_, cashier := p.login(t, "kasir", "secret-pass")
+
+	if rec := p.get("/api/admin/reports/sales.xlsx", cashier); rec.Code != 403 {
+		t.Fatalf("cashier export = %d, want 403", rec.Code)
+	}
+	if rec := p.get("/api/admin/reports/sales.xlsx?from=bogus", mgr); rec.Code != 422 {
+		t.Fatalf("bad date = %d, want 422", rec.Code)
+	}
+	rec := p.get("/api/admin/reports/sales.xlsx", mgr)
+	if rec.Code != 200 || !strings.Contains(rec.Header().Get("Content-Disposition"), ".xlsx") {
+		t.Fatalf("export = %d %v", rec.Code, rec.Header())
+	}
+	wb, err := excelize.OpenReader(rec.Body)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := wb.GetSheetList(); strings.Join(got, ",") != "Ringkasan,Per hari,Produk terlaris,Transaksi" {
+		t.Fatalf("sheets = %v", got)
+	}
+	if v, _ := wb.GetCellValue("Ringkasan", "B2"); v == "" {
+		t.Fatal("summary empty")
+	}
+	rows, _ := wb.GetRows("Transaksi")
+	if len(rows) != 2 || rows[1][6] != "Selesai" {
+		t.Fatalf("transaksi rows = %v", rows)
 	}
 }

@@ -169,6 +169,14 @@ func (s *Server) mountPOS(r chi.Router) {
 	})
 }
 
+var jakarta = func() *time.Location {
+	l, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		return time.FixedZone("WIB", 7*3600)
+	}
+	return l
+}()
+
 const defaultBrandColor = "#1E3A5F"
 
 var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
@@ -362,6 +370,7 @@ func (s *Server) mountAdmin(r chi.Router) {
 		err := s.sales.Void(r.Context(), actorOf(u), u.CompanyID, scopeFor(u), chi.URLParam(r, "number"), in.Reason)
 		respond(w, map[string]string{"status": "void"}, err, http.StatusOK)
 	})
+	r.Get("/reports/sales.xlsx", s.exportSales)
 	r.Get("/reports/sales", func(w http.ResponseWriter, r *http.Request) {
 		u := CurrentUser(r.Context())
 		from, to, ok := dateRange(w, r)
