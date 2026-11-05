@@ -184,6 +184,10 @@ func (s *Service) Bootstrap(ctx context.Context, company, name, username, passwo
 	if err := s.pool.QueryRow(ctx, `INSERT INTO companies (name) VALUES ($1) RETURNING id`, company).Scan(&companyID); err != nil {
 		return false, err
 	}
+	if _, err := s.pool.Exec(ctx, `INSERT INTO member_levels (company_id, name, min_points, earn_amount_per_point)
+		VALUES ($1,'Silver',0,10000),($1,'Gold',100,8000),($1,'Platinum',500,6000) ON CONFLICT DO NOTHING`, companyID); err != nil {
+		return false, err
+	}
 	_, err := s.Create(ctx, audit.Actor{Name: "bootstrap"}, CreateParams{
 		CompanyID: companyID, Name: name, Username: username, Password: password, Role: RoleOwner})
 	return err == nil, err

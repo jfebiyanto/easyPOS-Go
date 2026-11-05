@@ -45,3 +45,6 @@ func Next(ctx context.Context, tx pgx.Tx, companyID, docType, prefix string, now
 
 // BusinessDate is the Jakarta calendar date (end-of-day posting dates come in a later phase).
 func BusinessDate(now time.Time) string { return now.In(jakarta).Format("2006-01-02") }
+
+// Now is the clock used by callers that need a period; kept here so tests and services agree.
+func Now() time.Time { return time.Now() }

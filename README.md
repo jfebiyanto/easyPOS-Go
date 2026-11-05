@@ -28,9 +28,9 @@ make test              # butuh EASYPOS_TEST_DATABASE_URL / TESTDB
 
 | Peran | Layar |
 |---|---|
-| Kasir | POS: scan/cari produk, keranjang, bayar tunai/QRIS/EDC (multi metode), kembalian, struk cetak, daftar transaksi hari ini, tombol F3/F5/F6/F8/F9/F11/F12 |
-| Store Manager | Produk (tambah/ubah, SKU tidak bisa diubah), Stok (penyesuaian per gerai), Laporan penjualan |
+| Kasir | POS (termasuk F1 Retur dan F2 Pelanggan/member baru): scan/cari produk, keranjang, bayar tunai/QRIS/EDC (multi metode), kembalian, struk cetak, daftar transaksi hari ini, tombol F3/F5/F6/F8/F9/F11/F12 |
+| Store Manager | Pelanggan (poin, level), Produk (tambah/ubah, SKU tidak bisa diubah), Stok (penyesuaian per gerai), Laporan penjualan |
 | Owner | Sama dengan Store Manager, lintas gerai |
 
 Aturan yang sudah ditegakkan di server: harga dihitung server (bukan dari klien), PPN dijumlah lalu dibulatkan 2 desimal di dokumen,
-checkout idempoten lewat `client_uuid`, stok tidak bisa terjual melebihi saldo (aman untuk checkout bersamaan), ledger stok append-only.
+checkout dan retur idempoten lewat `client_uuid`, retur tidak bisa melebihi qty terjual (aman untuk retur bersamaan), poin member naik level otomatis dan dikurangi saat retur, stok tidak bisa terjual melebihi saldo (aman untuk checkout bersamaan), ledger stok append-only.

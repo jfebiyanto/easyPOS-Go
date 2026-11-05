@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>easyPOS</title>
 <style>
-:root{--primary:#0F6E63;--primary-hover:#0B5A51;--primary-c:#B8E3DA;--on-primary-c:#04332D;--bg:#FBFBFA;--surface:#fff;--surface2:#F1F1EE;--outline:#D6D6D0;--outline-strong:#9AA1A9;--text:#1B1F23;--muted:#5A6472;--danger:#B3261E;--danger-bg:#F9DEDC;--ok:#137A4B;--ok-bg:#C9E9D7;--warn:#B45309;--warn-bg:#FCE7C8;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+:root{--primary:#1E3A5F;--primary-hover:#152B47;--primary-c:#D6E2F3;--on-primary-c:#0B1F3A;--bg:#FBFBFA;--surface:#fff;--surface2:#F1F1EE;--outline:#D6D6D0;--outline-strong:#9AA1A9;--text:#1B1F23;--muted:#5A6472;--danger:#B3261E;--danger-bg:#F9DEDC;--ok:#0B1F3A;--ok-bg:#D6E2F3;--warn:#B45309;--warn-bg:#FCE7C8;--mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--text);font:14px/20px Inter,system-ui,-apple-system,"Segoe UI",sans-serif}
 .num{font-family:var(--mono);font-feature-settings:"tnum" 1,"zero" 1;text-align:right;white-space:nowrap}
@@ -17,7 +17,7 @@ button{font:inherit;cursor:pointer}
 .btn:disabled{opacity:.45;cursor:not-allowed}
 .btn.lg{height:48px;font-size:16px;font-weight:600}
 input,select{height:36px;padding:0 10px;border:1px solid var(--outline);border-radius:6px;font:inherit;background:var(--surface);color:var(--text);max-width:100%}
-input:focus,select:focus,button:focus-visible{outline:3px solid rgba(15,110,99,.35);border-color:var(--primary)}
+input:focus,select:focus,button:focus-visible{outline:3px solid var(--ring,rgba(30,58,95,.35));border-color:var(--primary)}
 label{display:block;font-size:13px;font-weight:500;margin:10px 0 4px}
 [hidden]{display:none!important}
 .center{min-height:100vh;display:grid;place-items:center;padding:16px}
@@ -123,11 +123,13 @@ $('#login-form').addEventListener('submit',async e=>{
 $('#logout').addEventListener('click',async()=>{await fetch('/api/auth/logout',{method:'POST'});showLogin()});
 const roleName={owner:'Owner',store_manager:'Store Manager',cashier:'Kasir'};
 function startApp(){
+  applyBrand(me.brand_color);
   $('#login-view').hidden=true;$('#app').hidden=false;
   $('#who').textContent=me.name+' · '+roleName[me.role];
   const tabs=[];
   if(me.role!=='owner')tabs.push(['pos','Kasir (POS)']);
-  if(me.role!=='cashier')tabs.push(['products','Produk'],['stock','Stok'],['report','Laporan']);
+  if(me.role!=='cashier')tabs.push(['products','Produk'],['stock','Stok'],['pricelists','Daftar Harga'],['customers','Pelanggan'],['report','Laporan']);
+  if(me.role==='owner')tabs.push(['settings','Pengaturan']);
   $('#nav').innerHTML=tabs.map(([k,l])=>`<button class="tab" role="tab" data-k="${k}">${l}</button>`).join('');
   $('#nav').onclick=e=>{const k=e.target.dataset.k;if(k)go(k)};
   go(tabs[0][0]);
@@ -135,12 +137,48 @@ function startApp(){
 function go(k){
   screen=k;detachPos();
   document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-selected',t.dataset.k===k));
-  ({pos:renderPOS,products:renderProducts,stock:renderStock,report:renderReport})[k]();
+  ({pos:renderPOS,products:renderProducts,stock:renderStock,customers:renderCustomers,report:renderReport,settings:renderSettings,pricelists:renderPriceLists})[k]();
 }
 setInterval(()=>{$('#clock').textContent=new Date().toLocaleString('id-ID',{timeZone:'Asia/Jakarta',dateStyle:'medium',timeStyle:'short'})},1000);
 
+/* ---------- Tema (warna kustom Owner) ---------- */
+const DEFAULT_BRAND='#1E3A5F';
+const BRAND_PRESETS=[['Navy','#1E3A5F'],['Biru','#1D4ED8'],['Teal','#0F766E'],['Ungu','#6D28D9'],['Merah marun','#9F1239'],['Abu gelap','#374151']];
+function mixHex(h,t,a){const n=x=>parseInt(h.slice(x,x+2),16),m=x=>Math.round(n(x)+(t-n(x))*a);return '#'+[1,3,5].map(i=>m(i).toString(16).padStart(2,'0')).join('')}
+function lum(h){const c=[1,3,5].map(i=>{const v=parseInt(h.slice(i,i+2),16)/255;return v<=.03928?v/12.92:Math.pow((v+.055)/1.055,2.4)});return .2126*c[0]+.7152*c[1]+.0722*c[2]}
+function applyBrand(hex){
+  if(!/^#[0-9a-f]{6}$/i.test(hex))hex=DEFAULT_BRAND;
+  /* Warna terlalu terang tidak terbaca dengan teks putih: gelapkan sampai kontras >= 4.5 */
+  let p=hex,i=0;while(1.05/(lum(p)+.05)<4.5&&i++<20)p=mixHex(p,0,.1);
+  const r=document.documentElement.style;
+  r.setProperty('--primary',p);r.setProperty('--primary-hover',mixHex(p,0,.25));
+  r.setProperty('--primary-c',mixHex(p,255,.85));r.setProperty('--on-primary-c',mixHex(p,0,.7));
+  r.setProperty('--ok',mixHex(p,0,.7));r.setProperty('--ok-bg',mixHex(p,255,.85));
+  r.setProperty('--ring',p+'59');
+  try{localStorage.setItem('brand',hex)}catch{}
+}
+try{applyBrand(localStorage.getItem('brand')||DEFAULT_BRAND)}catch{applyBrand(DEFAULT_BRAND)}
+async function renderSettings(){
+  let cur=me.brand_color;
+  $('#view').innerHTML=`<main class="page"><div class="card" style="padding:16px;max-width:520px"><h2 style="margin:0 0 4px">Warna aplikasi</h2>
+    <p class="muted" style="margin:0 0 12px">Berlaku untuk semua pengguna perusahaan Anda.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">${BRAND_PRESETS.map(([n,c])=>`<button class="btn" type="button" data-c="${c}" title="${n}" style="gap:6px"><span style="display:inline-block;width:16px;height:16px;border-radius:4px;background:${c}"></span>${n}</button>`).join('')}</div>
+    <label for="bc">Warna kustom</label><div style="display:flex;gap:8px;align-items:center"><input type="color" id="bc" value="${cur}" style="width:56px;height:40px;padding:2px"><input id="bh" value="${cur}" maxlength="7" style="width:110px;font-family:var(--mono)"></div>
+    <div class="muted" id="berr" hidden style="color:var(--danger);margin-top:6px"></div>
+    <div style="margin-top:16px;display:flex;gap:8px"><button class="btn primary" id="bs" type="button">Simpan</button><button class="btn" id="br" type="button">Kembalikan ke default</button></div></div></main>`;
+  const pick=c=>{$('#bc').value=c;$('#bh').value=c.toUpperCase();applyBrand(c)};
+  document.querySelectorAll('[data-c]').forEach(b=>b.onclick=()=>pick(b.dataset.c));
+  $('#bc').oninput=e=>pick(e.target.value);
+  $('#bh').oninput=e=>{if(/^#[0-9a-f]{6}$/i.test(e.target.value)){$('#bc').value=e.target.value;applyBrand(e.target.value)}};
+  $('#br').onclick=()=>pick(DEFAULT_BRAND);
+  $('#bs').onclick=async()=>{
+    try{const r=await api('/admin/settings/brand-color',{method:'PUT',body:{brand_color:$('#bh').value}});me.brand_color=r.brand_color;cur=r.brand_color;applyBrand(cur);$('#berr').hidden=true;toast('Warna disimpan')}
+    catch(x){$('#berr').textContent=x.message;$('#berr').hidden=false}
+  };
+}
+
 /* ---------- POS ---------- */
-let cart=[],sel=0,products=[],payTypes=[],busy=false;
+let cart=[],sel=0,products=[],payTypes=[],busy=false,customer=null;
 function detachPos(){if(posKeys){document.removeEventListener('keydown',posKeys);posKeys=null}}
 async function renderPOS(){
   cfg=await api('/pos/config');payTypes=await api('/pos/payment-types');
@@ -152,24 +190,25 @@ async function renderPOS(){
       <div class="cartwrap"><table><thead><tr><th>Kode</th><th>Nama Barang</th><th class="num">Qty</th><th class="num">Harga</th><th class="num">Total</th></tr></thead><tbody id="cart"></tbody></table></div>
     </section>
     <aside class="right">
-      <div class="card" style="padding:12px"><div class="muted">${esc(cfg.company)} · ${esc(cfg.store)}</div></div>
+      <div class="card" style="padding:12px"><div class="muted">${esc(cfg.company)} · ${esc(cfg.store)}</div>
+        <div id="custbox" style="margin-top:8px;display:flex;gap:8px;align-items:center"><div style="flex:1" id="custtxt"></div><button class="btn" id="custbtn" style="height:30px">F2</button></div></div>
       <div class="sum"><span>Item</span><span class="num" id="s-items">0</span><span>Subtotal</span><span class="num" id="s-sub">${rp(0)}</span><span id="s-taxl">PPN</span><span class="num" id="s-tax">${rp(0)}</span></div>
       <div class="total" id="total" aria-live="polite">${rp(0)}</div>
       <button class="btn primary lg" id="pay">Bayar (F12)</button>
     </aside>
   </div>
   <div class="fkeys">
-    <button data-f="F3"><b>F3</b> Cari</button><button data-f="F5"><b>F5</b> Ubah Qty</button><button data-f="F6"><b>F6</b> Transaksi</button>
+    <button data-f="F1"><b>F1</b> Retur</button><button data-f="F2"><b>F2</b> Pelanggan</button><button data-f="F3"><b>F3</b> Cari</button><button data-f="F5"><b>F5</b> Ubah Qty</button><button data-f="F6"><b>F6</b> Transaksi</button>
     <button data-f="F8"><b>F8</b> Hapus Item</button><button data-f="F9"><b>F9</b> Batal</button><button data-f="F11"><b>F11</b> Bayar Cepat</button><button data-f="F12"><b>F12</b> Bayar</button>
   </div>`;
   $('#scan').focus();
   $('#scan').addEventListener('keydown',onScan);
   $('#scan').addEventListener('input',debounce(searchLive,200));
-  $('#pay').onclick=openPay;
+  $('#pay').onclick=openPay;$('#custbtn').onclick=()=>fkey('F2');drawCustomer();
   document.querySelector('.fkeys').onclick=e=>{const f=e.target.closest('[data-f]');if(f)fkey(f.dataset.f)};
   posKeys=e=>{
     if(dlg.open)return;
-    if(/^F(3|5|6|8|9|11|12)$/.test(e.key)){e.preventDefault();fkey(e.key)}
+    if(/^F(1|2|3|5|6|8|9|11|12)$/.test(e.key)){e.preventDefault();fkey(e.key)}
     else if(e.key==='ArrowDown'&&cart.length){sel=Math.min(sel+1,cart.length-1);drawCart()}
     else if(e.key==='ArrowUp'&&cart.length){sel=Math.max(sel-1,0);drawCart()}
     else if((e.key==='+'||e.key==='-')&&document.activeElement!==$('#scan')){chg(sel,e.key==='+'?1:-1)}
@@ -178,13 +217,15 @@ async function renderPOS(){
   document.addEventListener('keydown',posKeys);
   drawCart();
 }
+/* Harga bertingkat: tier tertinggi dengan min_qty <= qty, selain itu harga dasar (server tetap yang menentukan) */
+function uprice(p,q){let v=Number(p.base_price),best=-1;for(const t of p.tiers||[]){const m=Number(t.min_qty);if(m<=q&&m>best){best=m;v=Number(t.price)}}return v}
 function debounce(fn,ms){let t;return(...a)=>{clearTimeout(t);t=setTimeout(()=>fn(...a),ms)}}
 async function searchLive(){
   const q=$('#scan').value.trim(),box=$('#results');
   if(q.length<2){box.hidden=true;return}
   products=await api('/pos/products?q='+encodeURIComponent(q));
   box.hidden=!products.length;
-  box.innerHTML=products.map((p,i)=>`<button data-i="${i}"><span class="num">${esc(p.sku)}</span><span class="name">${esc(p.name)}</span><span class="num">${rp(p.base_price)}</span><span class="badge ${Number(p.on_hand)<=0&&p.track_stock?'low':''}">${nf(p.on_hand)}</span></button>`).join('');
+  box.innerHTML=products.map((p,i)=>`<button data-i="${i}"><span class="num">${esc(p.sku)}</span><span class="name">${esc(p.name)}</span><span class="num">${rp(uprice(p,1))}</span><span class="badge ${Number(p.on_hand)<=0&&p.track_stock?'low':''}">${nf(p.on_hand)}</span></button>`).join('');
   box.onclick=e=>{const b=e.target.closest('button');if(b)add(products[b.dataset.i])};
 }
 async function onScan(e){
@@ -201,7 +242,7 @@ function add(p){
 }
 function chg(i,d){if(!cart[i])return;cart[i].qty=Math.max(1,cart[i].qty+d);drawCart()}
 function calc(){
-  let gross=0,items=0;for(const l of cart){gross+=Number(l.p.base_price)*l.qty;items+=l.qty}
+  let gross=0,items=0;for(const l of cart){gross+=uprice(l.p,l.qty)*l.qty;items+=l.qty}
   const r=cfg.ppn_enabled?Number(cfg.ppn_rate):0;
   const tax=cfg.ppn_inclusive?gross*r/(100+r):gross*r/100;
   const rt=x=>Math.round(x*100)/100;
@@ -210,7 +251,7 @@ function calc(){
 function drawCart(){
   $('#cart').innerHTML=cart.length?cart.map((l,i)=>`<tr class="${i===sel?'sel':''}" data-i="${i}"><td class="num" style="text-align:left">${esc(l.p.sku)}</td><td>${esc(l.p.name)}</td>
     <td class="num"><span class="qty"><button data-d="-1" aria-label="Kurangi">−</button><span>${nf(l.qty)}</span><button data-d="1" aria-label="Tambah">+</button></span></td>
-    <td class="num">${rp(l.p.base_price)}</td><td class="num">${rp(Number(l.p.base_price)*l.qty)}</td></tr>`).join(''):`<tr><td colspan="5" class="muted" style="text-align:center;padding:32px">Keranjang kosong. Scan atau cari produk untuk memulai.</td></tr>`;
+    <td class="num">${rp(uprice(l.p,l.qty))}</td><td class="num">${rp(uprice(l.p,l.qty)*l.qty)}</td></tr>`).join(''):`<tr><td colspan="5" class="muted" style="text-align:center;padding:32px">Keranjang kosong. Scan atau cari produk untuk memulai.</td></tr>`;
   $('#cart').onclick=e=>{const tr=e.target.closest('tr[data-i]');if(!tr)return;sel=Number(tr.dataset.i);const d=e.target.closest('[data-d]');if(d)chg(sel,Number(d.dataset.d));else drawCart()};
   const c=calc();
   $('#s-items').textContent=nf(c.items);$('#s-sub').textContent=rp(c.sub);$('#s-tax').textContent=rp(c.tax);
@@ -218,11 +259,13 @@ function drawCart(){
   $('#total').textContent=rp(c.total);$('#pay').disabled=!cart.length;
 }
 function fkey(k){
-  if(k==='F3'){$('#scan').focus();$('#scan').select()}
+  if(k==='F1')openReturn();
+  else if(k==='F2')openCustomer();
+  else if(k==='F3'){$('#scan').focus();$('#scan').select()}
   else if(k==='F5'){if(!cart[sel])return;const v=prompt('Qty baru untuk '+cart[sel].p.name,cart[sel].qty);const n=Number(v);if(v!==null&&n>0){cart[sel].qty=n;drawCart()}}
   else if(k==='F6')showToday();
   else if(k==='F8'){if(cart[sel]&&confirm('Hapus '+cart[sel].p.name+' dari keranjang?')){cart.splice(sel,1);sel=Math.max(0,sel-1);drawCart()}}
-  else if(k==='F9'){if(cart.length&&confirm('Batalkan transaksi dan kosongkan keranjang?')){cart=[];sel=0;drawCart()}}
+  else if(k==='F9'){if(cart.length&&confirm('Batalkan transaksi dan kosongkan keranjang?')){cart=[];sel=0;customer=null;drawCustomer();drawCart()}}
   else if(k==='F11'){const c=payTypes.find(p=>p.is_cash);if(cart.length&&c)checkout([{payment_type_id:c.id,amount:String(calc().total)}])}
   else if(k==='F12')openPay();
 }
@@ -258,22 +301,22 @@ function openPay(){
 async function checkout(payments){
   if(busy)return;busy=true;
   try{
-    const sale=await api('/pos/sales',{method:'POST',body:{client_uuid:crypto.randomUUID(),lines:cart.map(l=>({product_id:l.p.id,qty:String(l.qty)})),payments}});
-    cart=[];sel=0;drawCart();showReceipt(sale);
+    const sale=await api('/pos/sales',{method:'POST',body:{client_uuid:crypto.randomUUID(),customer_id:customer?customer.id:'',lines:cart.map(l=>({product_id:l.p.id,qty:String(l.qty)})),payments}});
+    cart=[];sel=0;customer=null;drawCustomer();drawCart();showReceipt(sale);
   }catch(x){toast(x.message,true);closeDlg()}finally{busy=false}
 }
 function receiptHTML(s){
   return `<div style="text-align:center"><b>${esc(cfg.company)}</b><br>${esc(cfg.store)}</div><hr>
-  <div>${esc(s.number)}<br>${new Date(s.sold_at).toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})}<br>Kasir: ${esc(s.cashier)}</div><hr>
+  <div>${esc(s.number)}<br>${s.customer?'Pelanggan: '+esc(s.customer)+'<br>':''}${new Date(s.sold_at).toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})}<br>Kasir: ${esc(s.cashier)}</div><hr>
   <table>${s.lines.map(l=>`<tr><td colspan="2">${esc(l.name)}</td></tr><tr><td>${nf(l.qty)} x ${nf(l.unit_price)}</td><td class="num">${nf(l.line_total)}</td></tr>`).join('')}</table><hr>
   <table><tr><td>Subtotal</td><td class="num">${nf(s.subtotal)}</td></tr><tr><td>PPN ${s.ppn_inclusive?'(termasuk)':''}</td><td class="num">${nf(s.tax_total)}</td></tr>
   <tr><td><b>TOTAL</b></td><td class="num"><b>${nf(s.total)}</b></td></tr>
   ${(s.payments||[]).map(p=>`<tr><td>${esc(p.type)}</td><td class="num">${nf(p.amount)}</td></tr>`).join('')}
-  <tr><td>Kembalian</td><td class="num">${nf(s.change_total)}</td></tr></table><hr><div style="text-align:center">Terima kasih</div>`;
+  <tr><td>Kembalian</td><td class="num">${nf(s.change_total)}</td></tr></table>${s.points_earned?'<div>Poin didapat: '+s.points_earned+'</div>':''}<hr><div style="text-align:center">Terima kasih</div>`;
 }
 function showReceipt(s){
   const d=openDlg(`<h2>Transaksi selesai</h2><div class="kpis" style="grid-template-columns:1fr 1fr"><div class="kpi"><small>Total</small><div>${rp(s.total)}</div></div><div class="kpi"><small>Kembalian</small><div>${rp(s.change_total)}</div></div></div>
-    <p class="muted">${esc(s.number)}</p><div class="actions"><button class="btn" id="rprint">Cetak struk</button><button class="btn primary" id="rnew">Transaksi baru</button></div>`);
+    <p class="muted">${esc(s.number)}${s.customer?' · '+esc(s.customer):''}${s.points_earned?' · +'+s.points_earned+' poin':''}</p><div class="actions"><button class="btn" id="rprint">Cetak struk</button><button class="btn primary" id="rnew">Transaksi baru</button></div>`);
   $('#receipt').innerHTML=receiptHTML(s);
   $('#rprint',d).onclick=()=>window.print();$('#rnew',d).onclick=()=>{closeDlg();$('#scan').focus()};
   $('#rnew',d).focus();
@@ -285,6 +328,61 @@ async function showToday(){
     <div class="actions"><button class="btn" id="tclose">Tutup</button></div>`);
   $('#tclose',d).onclick=closeDlg;
   d.onclick=async e=>{const id=e.target.dataset?.id;if(id){const s=await api('/pos/sales/'+id);$('#receipt').innerHTML=receiptHTML(s);window.print()}};
+}
+
+
+function drawCustomer(){
+  const t=$('#custtxt');if(!t)return;
+  t.innerHTML=customer?`<b>${esc(customer.name)}</b><br><span class="muted">${esc(customer.code)} · ${esc(customer.level)} · ${nf(customer.points)} poin</span>`:'<span class="muted">Pelanggan umum (tanpa member)</span>';
+}
+function openCustomer(){
+  const d=openDlg(`<h2>Pelanggan</h2><input id="cq" placeholder="No. HP, kode, atau nama" style="width:100%" autocomplete="off">
+    <div class="results" id="cres" style="margin-top:8px;max-height:220px"></div>
+    <details style="margin-top:12px"><summary style="cursor:pointer;font-weight:500">Daftarkan member baru</summary>
+      <label>Nama</label><input id="nn" style="width:100%"><label>No. HP</label><input id="np" inputmode="tel" style="width:100%"><div class="err" id="ne" hidden></div>
+      <div class="actions"><button class="btn primary" id="nsave" type="button">Daftar dan pilih</button></div></details>
+    <div class="actions"><button class="btn danger" id="cclear" type="button">Hapus pilihan</button><button class="btn" id="cclose" type="button">Tutup</button></div>`);
+  const run=async()=>{
+    const list=await api('/pos/customers?q='+encodeURIComponent($('#cq',d).value));
+    $('#cres',d).innerHTML=list.map((c,i)=>`<button data-i="${i}"><span class="name"><b>${esc(c.name)}</b><br><small class="muted">${esc(c.code)} · ${esc(c.phone)}</small></span><span class="badge ${c.is_member?'':'off'}">${c.is_member?esc(c.level)+' · '+nf(c.points):'Non-member'}</span></button>`).join('')||'<div class="muted" style="padding:10px">Tidak ditemukan.</div>';
+    $('#cres',d).onclick=e=>{const b=e.target.closest('button');if(b){customer=list[b.dataset.i];drawCustomer();closeDlg();$('#scan').focus()}};
+  };
+  $('#cq',d).addEventListener('input',debounce(run,200));run();$('#cq',d).focus();
+  $('#cclose',d).onclick=closeDlg;
+  $('#cclear',d).onclick=()=>{customer=null;drawCustomer();closeDlg()};
+  $('#nsave',d).onclick=async()=>{
+    try{customer=await api('/pos/customers',{method:'POST',body:{name:$('#nn',d).value,phone:$('#np',d).value}});drawCustomer();closeDlg();toast('Member terdaftar: '+customer.code)}
+    catch(x){$('#ne',d).textContent=x.message;$('#ne',d).hidden=false}
+  };
+}
+function openReturn(){
+  const uid=crypto.randomUUID();let lk=null;
+  const d=openDlg(`<h2>Retur penjualan</h2><div class="row"><input id="rn" placeholder="Nomor struk, mis. INV-202611-000001" autocomplete="off"><button class="btn primary" id="rgo" style="flex:0 0 auto">Cari</button></div>
+    <div class="err" id="re" hidden></div><div id="rbody"></div>
+    <div class="actions"><button class="btn" id="rclose" type="button">Tutup</button></div>`);
+  $('#rclose',d).onclick=closeDlg;$('#rn',d).focus();
+  const err=m=>{$('#re',d).textContent=m;$('#re',d).hidden=!m};
+  const find=async()=>{
+    err('');$('#rbody',d).innerHTML='';
+    try{lk=await api('/pos/returns/lookup?number='+encodeURIComponent($('#rn',d).value))}catch(x){return err(x.message)}
+    $('#rbody',d).innerHTML=`<p class="muted" style="margin:12px 0 4px">${esc(lk.number)} · ${new Date(lk.sold_at).toLocaleString('id-ID',{timeZone:'Asia/Jakarta'})}${lk.customer?' · '+esc(lk.customer):''} · total ${rp(lk.total)}</p>
+      <table><thead><tr><th>Barang</th><th class="num">Sisa</th><th class="num">Refund/unit</th><th class="num">Qty retur</th></tr></thead><tbody>
+      ${lk.lines.map((l,i)=>`<tr><td>${esc(l.name)}</td><td class="num">${nf(l.returnable)}</td><td class="num">${rp(l.unit_refund)}</td><td class="num"><input data-i="${i}" class="num rq" inputmode="decimal" value="0" ${Number(l.returnable)<=0?'disabled':''} style="width:70px"></td></tr>`).join('')}</tbody></table>
+      <div class="row" style="margin-top:8px"><input id="rr" placeholder="Alasan retur (wajib)"><select id="rm">${payTypes.map(p=>`<option value="${p.id}">${esc(p.name)}</option>`).join('')}</select></div>
+      <div class="sum" style="margin-top:8px"><span>Total refund</span><span class="num" id="rt">${rp(0)}</span></div>
+      <div class="actions"><button class="btn primary" id="rsave" type="button" disabled>Proses retur</button></div>`;
+    const upd=()=>{let t=0,any=false;d.querySelectorAll('.rq').forEach(i=>{const l=lk.lines[i.dataset.i],q=Number(i.value)||0;if(q>0)any=true;t+=q*Number(l.unit_refund)});$('#rt',d).textContent=rp(t);$('#rsave',d).disabled=!any};
+    d.querySelectorAll('.rq').forEach(i=>i.addEventListener('input',upd));
+    $('#rsave',d).onclick=async()=>{
+      const lines=[...d.querySelectorAll('.rq')].filter(i=>Number(i.value)>0).map(i=>({line_id:lk.lines[i.dataset.i].line_id,qty:String(Number(i.value))}));
+      try{
+        const r=await api('/pos/returns',{method:'POST',body:{client_uuid:uid,sale_number:lk.number,reason:$('#rr',d).value,refund_payment_type_id:$('#rm',d).value,lines}});
+        $('#rbody',d).innerHTML=`<div class="kpis" style="margin-top:12px;grid-template-columns:1fr 1fr"><div class="kpi"><small>Refund</small><div>${rp(r.total)}</div></div><div class="kpi"><small>Poin dikurangi</small><div>${r.points_deducted}</div></div></div><p class="muted">${esc(r.number)} untuk ${esc(r.sale_number)}. Stok sudah dikembalikan.</p>`;
+        toast('Retur '+r.number+' diproses');
+      }catch(x){err(x.message)}
+    };
+  };
+  $('#rgo',d).onclick=find;$('#rn',d).addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();find()}});
 }
 
 /* ---------- Admin: Produk ---------- */
@@ -329,6 +427,40 @@ function productForm(p,reload){
   };
 }
 
+
+/* ---------- Admin: Pelanggan ---------- */
+async function renderCustomers(){
+  $('#view').innerHTML=`<main class="page"><div class="toolbar"><input id="q" placeholder="Cari HP, kode, atau nama" style="min-width:260px"><span class="spacer"></span><button class="btn primary" id="addc">+ Pelanggan</button></div>
+    <div class="cartwrap" style="border-width:1px;border-color:var(--outline)"><table><thead><tr><th>Kode</th><th>Nama</th><th>HP</th><th>Level</th><th class="num">Poin</th><th>Status</th><th></th></tr></thead><tbody id="cl"></tbody></table></div></main>`;
+  const load=async()=>{
+    const list=await api('/admin/customers?q='+encodeURIComponent($('#q').value));
+    $('#cl').innerHTML=list.map(c=>`<tr><td class="num" style="text-align:left">${esc(c.code)}</td><td>${esc(c.name)}</td><td class="num" style="text-align:left">${esc(c.phone)}</td><td>${c.is_member?esc(c.level):'—'}</td><td class="num">${c.is_member?nf(c.points):'—'}</td>
+      <td><span class="badge ${c.is_active?'':'off'}">${c.is_active?'Aktif':'Nonaktif'}</span></td><td style="white-space:nowrap"><button class="btn" data-e="${c.id}" style="height:28px">Ubah</button> ${c.is_member?`<button class="btn" data-p="${c.id}" style="height:28px">Poin</button>`:''}</td></tr>`).join('')||'<tr><td colspan="7" class="muted">Belum ada pelanggan.</td></tr>';
+    $('#cl').onclick=e=>{const id=e.target.dataset.e||e.target.dataset.p;if(!id)return;const c=list.find(x=>x.id===id);e.target.dataset.e?customerForm(c,load):pointsForm(c,load)};
+  };
+  $('#q').addEventListener('input',debounce(load,250));$('#addc').onclick=()=>customerForm(null,load);load();
+}
+function customerForm(c,reload){
+  const d=openDlg(`<h2>${c?'Ubah pelanggan':'Pelanggan baru'}</h2><label>Nama</label><input id="n" value="${esc(c?.name)}" style="width:100%"><label>No. HP</label><input id="ph" inputmode="tel" value="${esc(c?.phone)}" style="width:100%">
+    <label>Email</label><input id="em" value="${esc(c?.email)}" style="width:100%"><label>Alamat</label><input id="ad" value="${esc(c?.address)}" style="width:100%">
+    <label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="mb" ${c?.is_member??true?'checked':''} style="height:auto"> Member (mengumpulkan poin)</label>
+    ${c?`<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="ac" ${c.is_active?'checked':''} style="height:auto"> Aktif</label>`:''}
+    <div class="err" id="e" hidden></div><div class="actions"><button class="btn" id="x">Batal</button><button class="btn primary" id="s">Simpan</button></div>`);
+  $('#x',d).onclick=closeDlg;
+  $('#s',d).onclick=async()=>{
+    const body={name:$('#n',d).value,phone:$('#ph',d).value,email:$('#em',d).value,address:$('#ad',d).value,is_member:$('#mb',d).checked};
+    if(c)body.is_active=$('#ac',d).checked;
+    try{await api(c?'/admin/customers/'+c.id:'/admin/customers',{method:c?'PUT':'POST',body});closeDlg();toast('Tersimpan');reload()}catch(x){$('#e',d).textContent=x.message;$('#e',d).hidden=false}
+  };
+}
+function pointsForm(c,reload){
+  const d=openDlg(`<h2>Penyesuaian poin</h2><p>${esc(c.name)} · saat ini <b class="num">${nf(c.points)}</b> poin (${esc(c.level)})</p>
+    <label>Perubahan poin (negatif untuk mengurangi)</label><input id="dl" class="num" inputmode="numeric" style="width:100%"><label>Alasan</label><input id="rs" style="width:100%">
+    <div class="err" id="e" hidden></div><div class="actions"><button class="btn" id="x">Batal</button><button class="btn primary" id="s">Simpan</button></div>`);
+  $('#x',d).onclick=closeDlg;
+  $('#s',d).onclick=async()=>{try{await api('/admin/customers/'+c.id+'/points',{method:'POST',body:{delta:parseInt($('#dl',d).value,10)||0,reason:$('#rs',d).value}});closeDlg();toast('Poin diperbarui');reload()}catch(x){$('#e',d).textContent=x.message;$('#e',d).hidden=false}};
+}
+
 /* ---------- Admin: Stok ---------- */
 async function renderStock(){
   const stores=await api('/admin/stores');
@@ -349,19 +481,75 @@ async function renderStock(){
   $('#q').addEventListener('input',debounce(load,250));if($('#st'))$('#st').onchange=load;load();
 }
 
+/* ---------- Admin: Daftar Harga ---------- */
+async function renderPriceLists(){
+  const owner=me.role==='owner';let data=await api('/admin/price-lists'),cur=null;
+  const draw=()=>{
+    $('#view').innerHTML=`<main class="page"><div class="grid2"><div>
+      <div class="toolbar"><h3 style="margin:0">Daftar harga</h3>${owner?'<button class="btn primary" id="new">Tambah</button>':''}</div>
+      <table><thead><tr><th>Kode</th><th>Nama</th><th>Berlaku</th><th class="num">Item</th><th></th></tr></thead><tbody>${data.lists.map(l=>`<tr><td class="num" style="text-align:left">${esc(l.code)}</td><td>${esc(l.name)}${l.is_active?'':' <span class="muted">(nonaktif)</span>'}</td><td class="muted">${l.effective_from||'-'} s/d ${l.effective_until||'-'}</td><td class="num">${l.items}</td>
+        <td><button class="btn" data-o="${l.id}" style="height:28px">Buka</button>${owner?` <button class="btn" data-e="${l.id}" style="height:28px">Ubah</button>`:''}</td></tr>`).join('')||'<tr><td colspan="5" class="muted">Belum ada daftar harga.</td></tr>'}</tbody></table>
+      <h3 style="margin:20px 0 8px">Daftar harga per gerai</h3>
+      <table><tbody>${data.stores.map(st=>`<tr><td>${esc(st.store)}</td><td><select data-s="${st.store_id}" ${owner?'':'disabled'}><option value="">(harga dasar produk)</option>${data.lists.filter(l=>l.is_active).map(l=>`<option value="${l.id}" ${l.id===st.price_list_id?'selected':''}>${esc(l.code)} - ${esc(l.name)}</option>`).join('')}</select></td></tr>`).join('')}</tbody></table></div>
+      <div id="items"></div></div></main>`;
+    $('#new')&&($('#new').onclick=()=>listForm(null));
+    document.querySelectorAll('[data-e]').forEach(b=>b.onclick=()=>listForm(data.lists.find(l=>l.id===b.dataset.e)));
+    document.querySelectorAll('[data-o]').forEach(b=>b.onclick=()=>{cur=data.lists.find(l=>l.id===b.dataset.o);drawItems()});
+    document.querySelectorAll('[data-s]').forEach(sel=>sel.onchange=async()=>{try{await api('/admin/stores/'+sel.dataset.s+'/price-list',{method:'PUT',body:{price_list_id:sel.value}});toast('Daftar harga gerai disimpan')}catch(x){toast(x.message,true);reload()}});
+    if(cur)drawItems();
+  };
+  const reload=async()=>{data=await api('/admin/price-lists');draw()};
+  function listForm(l){
+    const d=openDlg(`<h2>${l?'Ubah':'Tambah'} daftar harga</h2><div class="row"><div><label>Kode</label><input id="c" value="${esc(l?.code)}" style="width:100%"></div><div><label>Nama</label><input id="n" value="${esc(l?.name)}" style="width:100%"></div></div>
+      <div class="row"><div><label>Berlaku dari</label><input type="date" id="f" value="${l?.effective_from||''}" style="width:100%"></div><div><label>Berlaku sampai</label><input type="date" id="t" value="${l?.effective_until||''}" style="width:100%"></div></div>
+      <label><input type="checkbox" id="a" ${!l||l.is_active?'checked':''}> Aktif</label><div class="err" id="e" hidden></div><div class="actions"><button class="btn" id="x">Batal</button><button class="btn primary" id="s">Simpan</button></div>`);
+    $('#x',d).onclick=closeDlg;
+    $('#s',d).onclick=async()=>{try{await api(l?'/admin/price-lists/'+l.id:'/admin/price-lists',{method:l?'PUT':'POST',body:{code:$('#c',d).value,name:$('#n',d).value,effective_from:$('#f',d).value||null,effective_until:$('#t',d).value||null,is_active:$('#a',d).checked}});closeDlg();toast('Tersimpan');reload()}catch(x){$('#e',d).textContent=x.message;$('#e',d).hidden=false}};
+  }
+  async function drawItems(){
+    const items=await api('/admin/price-lists/'+cur.id+'/items');
+    $('#items').innerHTML=`<h3 style="margin:0 0 8px">Harga: ${esc(cur.name)}</h3>
+      ${owner?`<div class="toolbar"><input id="pq" placeholder="Cari produk (SKU / nama)" style="min-width:200px"><select id="pp" style="min-width:200px"></select><input id="pm" class="num" inputmode="decimal" placeholder="Min. qty" value="1" style="width:80px"><input id="pr" class="num" inputmode="decimal" placeholder="Harga" style="width:110px"><button class="btn primary" id="pa">Simpan harga</button></div>`:''}
+      <table><thead><tr><th>SKU</th><th>Produk</th><th class="num">Min. qty</th><th class="num">Harga dasar</th><th class="num">Harga</th><th></th></tr></thead><tbody>${items.map(i=>`<tr><td class="num" style="text-align:left">${esc(i.sku)}</td><td>${esc(i.name)}</td><td class="num">${nf(i.min_qty)}</td><td class="num">${rp(i.base_price)}</td><td class="num">${rp(i.price)}</td>
+        <td>${owner?`<button class="btn" data-d="${i.product_id}|${i.min_qty}" style="height:28px">Hapus</button>`:''}</td></tr>`).join('')||'<tr><td colspan="6" class="muted">Belum ada harga. Produk tanpa harga di daftar ini memakai harga dasar.</td></tr>'}</tbody></table>`;
+    if(!owner)return;
+    const fill=async()=>{const l=await api('/admin/products?q='+encodeURIComponent($('#pq').value));$('#pp').innerHTML=l.slice(0,50).map(p=>`<option value="${p.id}">${esc(p.sku)} - ${esc(p.name)}</option>`).join('')};
+    $('#pq').addEventListener('input',debounce(fill,250));fill();
+    const put=async(product_id,min_qty,price)=>{try{await api('/admin/price-lists/'+cur.id+'/items',{method:'PUT',body:{product_id,min_qty,price}});data=await api('/admin/price-lists');cur=data.lists.find(l=>l.id===cur.id);draw()}catch(x){toast(x.message,true)}};
+    $('#pa').onclick=()=>put($('#pp').value,$('#pm').value,$('#pr').value);
+    $('#items').querySelectorAll('[data-d]').forEach(b=>b.onclick=()=>{const[pid,mq]=b.dataset.d.split('|');put(pid,mq,'')});
+  }
+  draw();
+}
+
 /* ---------- Admin: Laporan ---------- */
 async function renderReport(){
   const stores=me.role==='owner'?await api('/admin/stores'):[];
   const today=new Date().toLocaleDateString('sv-SE',{timeZone:'Asia/Jakarta'});
   $('#view').innerHTML=`<main class="page"><div class="toolbar"><label style="margin:0">Dari</label><input type="date" id="f" value="${today}"><label style="margin:0">Sampai</label><input type="date" id="t" value="${today}">
-    ${me.role==='owner'?`<select id="st"><option value="">Semua gerai</option>${stores.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>`:''}<button class="btn primary" id="go">Tampilkan</button></div><div id="out"></div></main>`;
+    ${me.role==='owner'?`<select id="st"><option value="">Semua gerai</option>${stores.map(s=>`<option value="${s.id}">${esc(s.name)}</option>`).join('')}</select>`:''}<button class="btn primary" id="go">Tampilkan</button><button class="btn" id="xl" type="button">Unduh Excel</button></div><div id="out"></div></main>`;
   const load=async()=>{
     const r=await api(`/admin/reports/sales?from=${$('#f').value}&to=${$('#t').value}&store_id=${$('#st')?.value||''}`);
     $('#out').innerHTML=`<div class="kpis"><div class="kpi"><small>Omzet</small><div>${rp(r.totals.revenue)}</div></div><div class="kpi"><small>Transaksi</small><div>${r.totals.transactions}</div></div>
-      <div class="kpi"><small>Item terjual</small><div>${nf(r.totals.items)}</div></div><div class="kpi"><small>Rata-rata belanja</small><div>${rp(r.totals.avg_basket)}</div></div><div class="kpi"><small>PPN</small><div>${rp(r.totals.tax)}</div></div></div>
+      <div class="kpi"><small>Item terjual</small><div>${nf(r.totals.items)}</div></div><div class="kpi"><small>Rata-rata belanja</small><div>${rp(r.totals.avg_basket)}</div></div><div class="kpi"><small>PPN</small><div>${rp(r.totals.tax)}</div></div>
+      <div class="kpi"><small>Retur (${r.totals.returns}x)</small><div>${rp(r.totals.return_total)}</div></div><div class="kpi"><small>Omzet bersih</small><div>${rp(r.totals.net_revenue)}</div></div></div>
       <div class="grid2"><div><h3 style="margin:0 0 8px">Per hari</h3><table><thead><tr><th>Tanggal</th><th class="num">Transaksi</th><th class="num">Omzet</th></tr></thead><tbody>${r.daily.map(d=>`<tr><td>${d.date}</td><td class="num">${d.transactions}</td><td class="num">${rp(d.revenue)}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">Tidak ada transaksi.</td></tr>'}</tbody></table></div>
-      <div><h3 style="margin:0 0 8px">Produk terlaris</h3><table><thead><tr><th>Produk</th><th class="num">Qty</th><th class="num">Omzet</th></tr></thead><tbody>${r.top_products.map(p=>`<tr><td>${esc(p.name)}</td><td class="num">${nf(p.qty)}</td><td class="num">${rp(p.revenue)}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">Tidak ada data.</td></tr>'}</tbody></table></div></div>`;
+      <div><h3 style="margin:0 0 8px">Produk terlaris</h3><table><thead><tr><th>Produk</th><th class="num">Qty</th><th class="num">Omzet</th></tr></thead><tbody>${r.top_products.map(p=>`<tr><td>${esc(p.name)}</td><td class="num">${nf(p.qty)}</td><td class="num">${rp(p.revenue)}</td></tr>`).join('')||'<tr><td colspan="3" class="muted">Tidak ada data.</td></tr>'}</tbody></table></div></div>
+      <h3 style="margin:20px 0 8px">Transaksi</h3><div id="txl"></div>`;
+    loadTx();
   };
+  const loadTx=async()=>{
+    const list=await api(`/admin/sales?from=${$('#f').value}&to=${$('#t').value}&store_id=${$('#st')?.value||''}`);
+    $('#txl').innerHTML=`<table><thead><tr><th>No. struk</th><th>Waktu</th><th>Gerai</th><th>Kasir</th><th>Pelanggan</th><th class="num">Total</th><th>Status</th><th></th></tr></thead><tbody>${list.map(x=>`<tr><td class="num" style="text-align:left">${esc(x.number)}</td><td>${new Date(x.sold_at).toLocaleString('id-ID',{timeZone:'Asia/Jakarta',dateStyle:'short',timeStyle:'short'})}</td><td>${esc(x.store)}</td><td>${esc(x.cashier)}</td><td>${esc(x.customer)}</td><td class="num">${rp(x.total)}</td>
+      <td>${x.status==='void'?`<span class="muted" title="${esc(x.void_reason)}">Void · ${esc(x.void_reason)}</span>`:'Selesai'}</td><td>${x.can_void?`<button class="btn" data-v="${esc(x.number)}" style="height:28px">Void</button>`:''}</td></tr>`).join('')||'<tr><td colspan="8" class="muted">Tidak ada transaksi.</td></tr>'}</tbody></table>`;
+    $('#txl').onclick=e=>{const n=e.target.dataset.v;if(!n)return;
+      const d=openDlg(`<h2>Void transaksi ${esc(n)}</h2><p class="muted">Stok dikembalikan dan poin member ditarik kembali. Hanya bisa pada hari transaksi dan jika belum ada retur.</p><label>Alasan</label><input id="rs" style="width:100%">
+        <div class="err" id="e" hidden></div><div class="actions"><button class="btn" id="x">Batal</button><button class="btn primary" id="s">Void</button></div>`);
+      $('#x',d).onclick=closeDlg;
+      $('#s',d).onclick=async()=>{try{await api('/admin/sales/'+encodeURIComponent(n)+'/void',{method:'POST',body:{reason:$('#rs',d).value}});closeDlg();toast('Transaksi di-void');load()}catch(x){$('#e',d).textContent=x.message;$('#e',d).hidden=false}};
+    };
+  };
+  $('#xl').onclick=()=>{location.href=`/api/admin/reports/sales.xlsx?from=${$('#f').value}&to=${$('#t').value}&store_id=${$('#st')?.value||''}`};
   $('#go').onclick=()=>load().catch(x=>toast(x.message,true));load();
 }
 window.addEventListener('beforeunload',e=>{if(screen==='pos'&&cart.length){e.preventDefault();e.returnValue=''}});

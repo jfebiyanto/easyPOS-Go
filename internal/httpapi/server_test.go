@@ -3,6 +3,7 @@ package httpapi_test
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -34,7 +35,7 @@ func testPool(t *testing.T) *pgxpool.Pool {
 	if err := database.Migrate(pool); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := pool.Exec(ctx, `TRUNCATE sessions, activity_logs, sale_payments, sale_lines, sales, stock_ledger, store_stocks, numbering_configs, payment_types, products, product_groups, units, users, stores, companies CASCADE`); err != nil {
+	if _, err := pool.Exec(ctx, `TRUNCATE sessions, activity_logs, sales_return_lines, sales_returns, loyalty_ledger, customers, member_levels, sale_payments, sale_lines, sales, stock_ledger, store_stocks, numbering_configs, payment_types, products, product_groups, units, users, stores, companies CASCADE`); err != nil {
 		t.Fatal(err)
 	}
 	return pool
@@ -229,3 +230,50 @@ func (f fixture) postJSON(path string, cookies []*http.Cookie, body string) *htt
 	f.srv.ServeHTTP(rec, req)
 	return rec
 }
+
+func (f fixture) putJSON(path string, cookies []*http.Cookie, body string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest("PUT", path, strings.NewReader(body))
+	for _, c := range cookies {
+		req.AddCookie(c)
+	}
+	rec := httptest.NewRecorder()
+	f.srv.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestBrandColor(t *testing.T) {
+	f := setup(t)
+	f.mk(t, "bo", identity.RoleOwner)
+	f.mk(t, "bm", identity.RoleStoreManager)
+	_, owner := f.login(t, "bo", "secret-pass")
+	_, mgr := f.login(t, "bm", "secret-pass")
+
+	var me map[string]any
+	_ = json.NewDecoder(f.get("/api/auth/me", owner).Body).Decode(&me)
+	if me["brand_color"] != "#1E3A5F" {
+		t.Fatalf("default brand_color = %v", me["brand_color"])
+	}
+	if rec := f.putJSON("/api/admin/settings/brand-color", mgr, `{"brand_color":"#112233"}`); rec.Code != 403 {
+		t.Fatalf("manager change = %d, want 403", rec.Code)
+	}
+	for _, bad := range []string{`{"brand_color":"red"}`, `{"brand_color":"#12345"}`, `{"brand_color":"#GGGGGG"}`} {
+		if rec := f.putJSON("/api/admin/settings/brand-color", owner, bad); rec.Code != 422 {
+			t.Fatalf("%s = %d, want 422", bad, rec.Code)
+		}
+	}
+	if rec := f.putJSON("/api/admin/settings/brand-color", owner, `{"brand_color":"#0f766e"}`); rec.Code != 200 {
+		t.Fatalf("owner change = %d %s", rec.Code, rec.Body)
+	}
+	// Other roles of the same company see the new color.
+	me = nil
+	_ = json.NewDecoder(f.get("/api/auth/me", mgr).Body).Decode(&me)
+	if me["brand_color"] != "#0F766E" {
+		t.Fatalf("brand_color after change = %v", me["brand_color"])
+	}
+	var n int
+	if err := f.pool.QueryRow(context.Background(), `SELECT count(*) FROM activity_logs WHERE action='settings.brand_color'`).Scan(&n); err != nil || n != 1 {
+		t.Fatalf("audit rows = %d, err %v", n, err)
+	}
+}
+
+func jsonDecode(r io.Reader, v any) error { return json.NewDecoder(r).Decode(v) }

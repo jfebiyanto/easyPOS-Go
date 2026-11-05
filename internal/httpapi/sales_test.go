@@ -15,6 +15,8 @@ import (
 	"github.com/jfebiyanto/easyPOS-Go/internal/audit"
 	"github.com/jfebiyanto/easyPOS-Go/internal/catalog"
 	"github.com/jfebiyanto/easyPOS-Go/internal/identity"
+	"github.com/jfebiyanto/easyPOS-Go/internal/loyalty"
+	"github.com/jfebiyanto/easyPOS-Go/internal/returns"
 	"github.com/jfebiyanto/easyPOS-Go/internal/sales"
 )
 
@@ -22,6 +24,7 @@ type posFixture struct {
 	fixture
 	cat     *catalog.Service
 	sales   *sales.Service
+	returns *returns.Service
 	cashier sales.Cashier
 	cash    string
 	qris    string
@@ -32,7 +35,7 @@ func setupPOS(t *testing.T) posFixture {
 	t.Helper()
 	f := setup(t)
 	ctx := context.Background()
-	p := posFixture{fixture: f, cat: catalog.NewService(f.pool), sales: sales.NewService(f.pool)}
+	p := posFixture{fixture: f, cat: catalog.NewService(f.pool), sales: sales.NewService(f.pool), returns: returns.NewService(f.pool)}
 	u := f.mk(t, "kasir", identity.RoleCashier)
 	p.cashier = sales.Cashier{ID: u.ID, Name: u.Name, CompanyID: f.companyID, StoreID: f.storeID}
 	must := func(err error) {
@@ -43,6 +46,7 @@ func setupPOS(t *testing.T) posFixture {
 	}
 	must(f.pool.QueryRow(ctx, `INSERT INTO payment_types (company_id, code, name, is_cash) VALUES ($1,'CASH','Tunai',true) RETURNING id::text`, f.companyID).Scan(&p.cash))
 	must(f.pool.QueryRow(ctx, `INSERT INTO payment_types (company_id, code, name, is_cash) VALUES ($1,'QRIS','QRIS',false) RETURNING id::text`, f.companyID).Scan(&p.qris))
+	must(loyalty.EnsureDefaults(ctx, f.pool, f.companyID))
 	ref, err := p.cat.CreateUnit(ctx, audit.Actor{}, f.companyID, "pcs", "Pcs")
 	must(err)
 	p.unit = ref.ID

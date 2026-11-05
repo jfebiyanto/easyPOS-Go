@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -11,7 +13,9 @@ import (
 	"github.com/jfebiyanto/easyPOS-Go/internal/audit"
 	"github.com/jfebiyanto/easyPOS-Go/internal/catalog"
 	"github.com/jfebiyanto/easyPOS-Go/internal/identity"
+	"github.com/jfebiyanto/easyPOS-Go/internal/loyalty"
 	"github.com/jfebiyanto/easyPOS-Go/internal/numbering"
+	"github.com/jfebiyanto/easyPOS-Go/internal/returns"
 	"github.com/jfebiyanto/easyPOS-Go/internal/sales"
 )
 
@@ -28,11 +32,14 @@ func actorOf(u *identity.User) audit.Actor { return audit.Actor{ID: u.ID, Name: 
 // fail maps domain errors to HTTP statuses.
 func fail(w http.ResponseWriter, err error) {
 	switch {
-	case errors.Is(err, catalog.ErrInvalid), errors.Is(err, sales.ErrInvalid), errors.Is(err, sales.ErrUnderpaid):
+	case errors.Is(err, catalog.ErrInvalid), errors.Is(err, sales.ErrInvalid), errors.Is(err, sales.ErrUnderpaid),
+		errors.Is(err, loyalty.ErrInvalid), errors.Is(err, returns.ErrInvalid), errors.Is(err, returns.ErrWindow),
+		errors.Is(err, returns.ErrVoided), errors.Is(err, returns.ErrOverReturn),
+		errors.Is(err, sales.ErrAlreadyVoid), errors.Is(err, sales.ErrHasReturns), errors.Is(err, sales.ErrVoidDay):
 		writeErr(w, http.StatusUnprocessableEntity, err.Error())
-	case errors.Is(err, catalog.ErrDuplicate), errors.Is(err, sales.ErrInsufficientStock):
+	case errors.Is(err, catalog.ErrDuplicate), errors.Is(err, sales.ErrInsufficientStock), errors.Is(err, loyalty.ErrDuplicatePhone):
 		writeErr(w, http.StatusConflict, err.Error())
-	case errors.Is(err, catalog.ErrNotFound), errors.Is(err, sales.ErrNotFound):
+	case errors.Is(err, catalog.ErrNotFound), errors.Is(err, sales.ErrNotFound), errors.Is(err, loyalty.ErrNotFound), errors.Is(err, returns.ErrNotFound):
 		writeErr(w, http.StatusNotFound, err.Error())
 	default:
 		writeErr(w, http.StatusInternalServerError, "terjadi kesalahan")
@@ -68,6 +75,9 @@ func (s *Server) mountPOS(r chi.Router) {
 	r.Get("/products", func(w http.ResponseWriter, r *http.Request) {
 		u := CurrentUser(r.Context())
 		list, err := s.catalog.List(r.Context(), u.CompanyID, r.URL.Query().Get("q"), true, *u.StoreID)
+		if err == nil {
+			err = s.catalog.WithTiers(r.Context(), *u.StoreID, numbering.BusinessDate(time.Now()), list)
+		}
 		if err != nil {
 			fail(w, err)
 			return
@@ -92,6 +102,38 @@ func (s *Server) mountPOS(r chi.Router) {
 			return
 		}
 		writeJSON(w, http.StatusOK, list)
+	})
+	r.Get("/customers", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.loyalty.Search(r.Context(), CurrentUser(r.Context()).CompanyID, r.URL.Query().Get("q"))
+		respond(w, list, err, http.StatusOK)
+	})
+	r.Post("/customers", func(w http.ResponseWriter, r *http.Request) { // quick member registration at the till (FR-B5-02)
+		var in loyalty.Input
+		if !decode(w, r, &in) {
+			return
+		}
+		in.IsMember = true
+		u := CurrentUser(r.Context())
+		c, err := s.loyalty.Create(r.Context(), actorOf(u), u.CompanyID, in)
+		respond(w, c, err, http.StatusCreated)
+	})
+	r.Get("/returns/lookup", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		res, err := s.returns.Lookup(r.Context(), returns.Actor{ID: u.ID, Name: u.Name, CompanyID: u.CompanyID, StoreID: *u.StoreID}, r.URL.Query().Get("number"))
+		respond(w, res, err, http.StatusOK)
+	})
+	r.Post("/returns", func(w http.ResponseWriter, r *http.Request) {
+		var in returns.Input
+		if !decode(w, r, &in) {
+			return
+		}
+		u := CurrentUser(r.Context())
+		res, err := s.returns.Create(r.Context(), returns.Actor{ID: u.ID, Name: u.Name, CompanyID: u.CompanyID, StoreID: *u.StoreID}, in)
+		code := http.StatusCreated
+		if res != nil && res.Replayed {
+			code = http.StatusOK
+		}
+		respond(w, res, err, code)
 	})
 	r.Post("/sales", func(w http.ResponseWriter, r *http.Request) {
 		u := CurrentUser(r.Context())
@@ -130,7 +172,63 @@ func (s *Server) mountPOS(r chi.Router) {
 	})
 }
 
+var jakarta = func() *time.Location {
+	l, err := time.LoadLocation("Asia/Jakarta")
+	if err != nil {
+		return time.FixedZone("WIB", 7*3600)
+	}
+	return l
+}()
+
+const defaultBrandColor = "#1E3A5F"
+
+var hexColor = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
+
+// putBrandColor lets the Owner customise the UI accent color for the whole company.
+func (s *Server) putBrandColor(w http.ResponseWriter, r *http.Request) {
+	u := CurrentUser(r.Context())
+	var in struct {
+		BrandColor string `json:"brand_color"`
+	}
+	if !decode(w, r, &in) {
+		return
+	}
+	color := strings.ToUpper(strings.TrimSpace(in.BrandColor))
+	if !hexColor.MatchString(color) {
+		writeErr(w, http.StatusUnprocessableEntity, "warna harus berformat #RRGGBB")
+		return
+	}
+	tx, err := s.pool.Begin(r.Context())
+	if err != nil {
+		fail(w, err)
+		return
+	}
+	defer tx.Rollback(r.Context())
+	var old string
+	if err := tx.QueryRow(r.Context(), `SELECT brand_color FROM companies WHERE id=$1 FOR UPDATE`, u.CompanyID).Scan(&old); err != nil {
+		fail(w, err)
+		return
+	}
+	if _, err := tx.Exec(r.Context(), `UPDATE companies SET brand_color=$2 WHERE id=$1`, u.CompanyID, color); err != nil {
+		fail(w, err)
+		return
+	}
+	if err := audit.Record(r.Context(), tx, audit.Entry{CompanyID: u.CompanyID, Actor: actorOf(u), Action: "settings.brand_color",
+		SubjectType: "company", SubjectID: u.CompanyID, Description: "Ubah warna tema",
+		Properties: map[string]any{"from": old, "to": color}}); err != nil {
+		fail(w, err)
+		return
+	}
+	if err := tx.Commit(r.Context()); err != nil {
+		fail(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]string{"brand_color": color})
+}
+
 func (s *Server) mountAdmin(r chi.Router) {
+	r.With(RequireRole(identity.RoleOwner)).Put("/settings/brand-color", s.putBrandColor)
+	s.mountPriceLists(r)
 	r.Get("/ping", func(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]string{"pong": "ok"})
 	})
@@ -186,6 +284,40 @@ func (s *Server) mountAdmin(r chi.Router) {
 		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
 	})
 
+	r.Get("/customers", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.loyalty.Search(r.Context(), CurrentUser(r.Context()).CompanyID, r.URL.Query().Get("q"))
+		respond(w, list, err, http.StatusOK)
+	})
+	r.Post("/customers", func(w http.ResponseWriter, r *http.Request) {
+		var in loyalty.Input
+		if !decode(w, r, &in) {
+			return
+		}
+		u := CurrentUser(r.Context())
+		c, err := s.loyalty.Create(r.Context(), actorOf(u), u.CompanyID, in)
+		respond(w, c, err, http.StatusCreated)
+	})
+	r.Put("/customers/{id}", func(w http.ResponseWriter, r *http.Request) {
+		var in loyalty.Input
+		if !decode(w, r, &in) {
+			return
+		}
+		u := CurrentUser(r.Context())
+		err := s.loyalty.Update(r.Context(), actorOf(u), u.CompanyID, chi.URLParam(r, "id"), in)
+		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
+	})
+	r.Post("/customers/{id}/points", func(w http.ResponseWriter, r *http.Request) {
+		var in struct {
+			Delta  int    `json:"delta"`
+			Reason string `json:"reason"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		u := CurrentUser(r.Context())
+		err := s.loyalty.Adjust(r.Context(), actorOf(u), u.CompanyID, chi.URLParam(r, "id"), in.Delta, in.Reason)
+		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
+	})
 	r.Get("/stores", func(w http.ResponseWriter, r *http.Request) {
 		u := CurrentUser(r.Context())
 		rows, err := s.pool.Query(r.Context(), `SELECT id::text, code, name FROM stores WHERE company_id=$1 AND is_active
@@ -224,27 +356,53 @@ func (s *Server) mountAdmin(r chi.Router) {
 		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
 	})
 
-	r.Get("/reports/sales", func(w http.ResponseWriter, r *http.Request) {
+	r.Get("/sales", func(w http.ResponseWriter, r *http.Request) {
 		u := CurrentUser(r.Context())
-		today := numbering.BusinessDate(time.Now())
-		from, to := r.URL.Query().Get("from"), r.URL.Query().Get("to")
-		if from == "" {
-			from = today
-		}
-		if to == "" {
-			to = today
-		}
-		if _, err := time.Parse("2006-01-02", from); err != nil {
-			writeErr(w, http.StatusUnprocessableEntity, "format tanggal harus YYYY-MM-DD")
+		from, to, ok := dateRange(w, r)
+		if !ok {
 			return
 		}
-		if _, err := time.Parse("2006-01-02", to); err != nil {
-			writeErr(w, http.StatusUnprocessableEntity, "format tanggal harus YYYY-MM-DD")
+		list, err := s.sales.List(r.Context(), u.CompanyID, storeScope(r), from, to)
+		respond(w, list, err, http.StatusOK)
+	})
+	r.Post("/sales/{number}/void", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		var in struct{ Reason string }
+		if !decode(w, r, &in) {
+			return
+		}
+		err := s.sales.Void(r.Context(), actorOf(u), u.CompanyID, scopeFor(u), chi.URLParam(r, "number"), in.Reason)
+		respond(w, map[string]string{"status": "void"}, err, http.StatusOK)
+	})
+	r.Get("/reports/sales.xlsx", s.exportSales)
+	r.Get("/reports/sales", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		from, to, ok := dateRange(w, r)
+		if !ok {
 			return
 		}
 		sum, err := s.reports.Sales(r.Context(), u.CompanyID, storeScope(r), from, to)
 		respond(w, sum, err, http.StatusOK)
 	})
+}
+
+// dateRange reads ?from&to (YYYY-MM-DD), defaulting both to today in Jakarta.
+func dateRange(w http.ResponseWriter, r *http.Request) (from, to string, ok bool) {
+	today := numbering.BusinessDate(time.Now())
+	from, to = r.URL.Query().Get("from"), r.URL.Query().Get("to")
+	if from == "" {
+		from = today
+	}
+	if to == "" {
+		to = today
+	}
+	for _, d := range []string{from, to} {
+		if _, err := time.Parse("2006-01-02", d); err != nil {
+			writeErr(w, http.StatusUnprocessableEntity, "format tanggal harus YYYY-MM-DD")
+			return "", "", false
+		}
+	}
+	return from, to, true
 }
 
 func scopeFor(u *identity.User) string {
@@ -260,4 +418,56 @@ func respond(w http.ResponseWriter, v any, err error, code int) {
 		return
 	}
 	writeJSON(w, code, v)
+}
+
+// mountPriceLists: everyone in the admin area can read; only the Owner changes lists and store assignment (FR-A7-04).
+func (s *Server) mountPriceLists(r chi.Router) {
+	owner := RequireRole(identity.RoleOwner)
+	r.Get("/price-lists", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		lists, err := s.catalog.PriceLists(r.Context(), u.CompanyID)
+		if err != nil {
+			fail(w, err)
+			return
+		}
+		stores, err := s.catalog.StorePriceLists(r.Context(), u.CompanyID)
+		respond(w, map[string]any{"lists": lists, "stores": stores}, err, http.StatusOK)
+	})
+	save := func(id func(*http.Request) string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			u := CurrentUser(r.Context())
+			var in catalog.PriceListInput
+			if !decode(w, r, &in) {
+				return
+			}
+			got, err := s.catalog.SavePriceList(r.Context(), actorOf(u), u.CompanyID, id(r), in)
+			respond(w, map[string]string{"id": got}, err, http.StatusOK)
+		}
+	}
+	r.With(owner).Post("/price-lists", save(func(*http.Request) string { return "" }))
+	r.With(owner).Put("/price-lists/{id}", save(func(r *http.Request) string { return chi.URLParam(r, "id") }))
+	r.Get("/price-lists/{id}/items", func(w http.ResponseWriter, r *http.Request) {
+		list, err := s.catalog.PriceItems(r.Context(), CurrentUser(r.Context()).CompanyID, chi.URLParam(r, "id"))
+		respond(w, list, err, http.StatusOK)
+	})
+	r.With(owner).Put("/price-lists/{id}/items", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		var in catalog.PriceItemInput
+		if !decode(w, r, &in) {
+			return
+		}
+		err := s.catalog.SetPriceItem(r.Context(), actorOf(u), u.CompanyID, chi.URLParam(r, "id"), in)
+		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
+	})
+	r.With(owner).Put("/stores/{id}/price-list", func(w http.ResponseWriter, r *http.Request) {
+		u := CurrentUser(r.Context())
+		var in struct {
+			PriceListID string `json:"price_list_id"`
+		}
+		if !decode(w, r, &in) {
+			return
+		}
+		err := s.catalog.AssignStorePriceList(r.Context(), actorOf(u), u.CompanyID, chi.URLParam(r, "id"), in.PriceListID)
+		respond(w, map[string]string{"status": "ok"}, err, http.StatusOK)
+	})
 }

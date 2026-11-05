@@ -11,6 +11,7 @@ import (
 	"github.com/jfebiyanto/easyPOS-Go/internal/audit"
 	"github.com/jfebiyanto/easyPOS-Go/internal/catalog"
 	"github.com/jfebiyanto/easyPOS-Go/internal/identity"
+	"github.com/jfebiyanto/easyPOS-Go/internal/loyalty"
 )
 
 const Password = "demo1234"
@@ -52,6 +53,16 @@ func Seed(ctx context.Context, pool *pgxpool.Pool) error {
 		if _, err := pool.Exec(ctx, `INSERT INTO payment_types (company_id, code, name, is_cash) VALUES ($1,$2,$3,$4)`,
 			companyID, pt.code, pt.name, pt.cash); err != nil {
 			return err
+		}
+	}
+
+	if err := loyalty.EnsureDefaults(ctx, pool, companyID); err != nil {
+		return err
+	}
+	ly := loyalty.NewService(pool)
+	for _, c := range []loyalty.Input{{Name: "Ani Wijaya", Phone: "081234560001", IsMember: true}, {Name: "Rudi Hartono", Phone: "081234560002", IsMember: true}} {
+		if _, err := ly.Create(ctx, actor, companyID, c); err != nil {
+			return fmt.Errorf("pelanggan %s: %w", c.Name, err)
 		}
 	}
 
