@@ -45,3 +45,6 @@ INSERT INTO stores (id, company_id, code, name, created_at, updated_at) VALUES (
 -- name: InsertUser :exec
 INSERT INTO users (id, company_id, store_id, name, username, role, password, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $8);
+
+-- name: DeleteUserTokens :exec
+DELETE FROM personal_access_tokens WHERE tokenable_type = 'App\Models\User' AND tokenable_id = $1;

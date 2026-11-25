@@ -50,7 +50,8 @@ func (e *env) do(method, path, auth string, csrf bool, body any) resp {
 	req.Header.Set("Content-Type", "application/json")
 	switch {
 	case strings.HasPrefix(auth, "cookie:"):
-		req.AddCookie(&http.Cookie{Name: httpapi.CookieName, Value: strings.TrimPrefix(auth, "cookie:")})
+		name, val, _ := strings.Cut(strings.TrimPrefix(auth, "cookie:"), "=")
+		req.AddCookie(&http.Cookie{Name: name, Value: val})
 	case auth != "":
 		req.Header.Set("Authorization", auth)
 	}
@@ -122,7 +123,7 @@ func TestLogin(t *testing.T) {
 		if r.Code != 200 || r.Body["token"] != nil {
 			t.Fatalf("code %d body %v", r.Code, r.Body)
 		}
-		if len(r.Cookies) != 1 || r.Cookies[0].Name != httpapi.CookieName || !r.Cookies[0].HttpOnly || r.Cookies[0].SameSite != http.SameSiteLaxMode {
+		if len(r.Cookies) != 1 || r.Cookies[0].Name != httpapi.CookieBO || !r.Cookies[0].HttpOnly || r.Cookies[0].SameSite != http.SameSiteLaxMode {
 			t.Fatalf("cookie salah: %+v", r.Cookies)
 		}
 	})
@@ -244,7 +245,7 @@ func TestTokenDanSesi(t *testing.T) {
 
 	t.Run("cookie: GET boleh, POST tanpa header CSRF = 403, dengan header sukses", func(t *testing.T) {
 		login := e.login("owner", "backoffice")
-		ck := "cookie:" + login.Cookies[0].Value
+		ck := "cookie:" + login.Cookies[0].Name + "=" + login.Cookies[0].Value
 		if r := e.do("GET", "/api/auth/me", ck, false, nil); r.Code != 200 {
 			t.Fatalf("GET cookie: %d", r.Code)
 		}
@@ -370,5 +371,89 @@ func TestNumberingsOwnerOnly(t *testing.T) {
 	}
 	if r := e.do("POST", "/api/numberings/xxx/next", owner, false, nil); r.Code != 404 {
 		t.Fatalf("tipe asing: %d", r.Code)
+	}
+}
+
+func TestCookieTerpisahBackofficeDanPOS(t *testing.T) {
+	e := setup(t)
+	bo, pos := e.login("owner", "backoffice"), e.login("owner", "pos")
+	if bo.Cookies[0].Name != httpapi.CookieBO || pos.Cookies[0].Name != httpapi.CookiePOS {
+		t.Fatalf("nama cookie salah: %v %v", bo.Cookies, pos.Cookies)
+	}
+	boC := "cookie:" + httpapi.CookieBO + "=" + bo.Cookies[0].Value
+	posC := "cookie:" + httpapi.CookiePOS + "=" + pos.Cookies[0].Value
+	if r := e.do("GET", "/api/auth/me", boC, false, nil); r.Code != 200 {
+		t.Fatalf("bo di /api: %d", r.Code)
+	}
+	if r := e.do("GET", "/api/pos/auth/me", posC, false, nil); r.Code != 200 {
+		t.Fatalf("pos di /api/pos: %d", r.Code)
+	}
+	// keduanya tetap valid; cookie yang salah rute tidak dipakai
+	if r := e.do("GET", "/api/pos/auth/me", boC, false, nil); r.Code != 401 {
+		t.Fatalf("cookie bo di /api/pos harus 401, dapat %d", r.Code)
+	}
+	if r := e.do("GET", "/api/auth/me", posC, false, nil); r.Code != 401 {
+		t.Fatalf("cookie pos di /api harus 401, dapat %d", r.Code)
+	}
+	if r := e.do("GET", "/api/auth/me", boC, false, nil); r.Code != 200 {
+		t.Fatal("sesi bo harus tetap hidup")
+	}
+	// Bearer didahulukan dan berlaku di kedua prefix
+	if r := e.do("GET", "/api/pos/auth/me", e.bearer("owner"), false, nil); r.Code != 200 {
+		t.Fatalf("bearer di /api/pos: %d", r.Code)
+	}
+	// logout POS tidak menghapus sesi backoffice
+	if r := e.do("POST", "/api/pos/auth/logout", posC, true, nil); r.Code != 204 || r.Cookies[0].Name != httpapi.CookiePOS {
+		t.Fatalf("logout pos: %d %v", r.Code, r.Cookies)
+	}
+	if r := e.do("GET", "/api/auth/me", boC, false, nil); r.Code != 200 {
+		t.Fatal("sesi bo harus tetap hidup setelah logout pos")
+	}
+}
+
+func TestRevalidasiGeraiAktif(t *testing.T) {
+	e := setup(t)
+	ctx := context.Background()
+	active := func(auth string) any { return e.do("GET", "/api/auth/me", auth, false, nil).Body["active_store"] }
+
+	mgr := e.bearer("manager")
+	if _, err := e.pool.Exec(ctx, "UPDATE users SET store_id=$1 WHERE id=$2", e.seed.StoreB, e.seed.Manager); err != nil {
+		t.Fatal(err)
+	}
+	if as, _ := active(mgr).(map[string]any); as == nil || as["code"] != "BBB" {
+		t.Fatalf("gerai aktif manager harus mengikuti users.store_id: %v", active(mgr))
+	}
+	_, _ = e.pool.Exec(ctx, "UPDATE users SET store_id=NULL WHERE id=$1", e.seed.Manager)
+	if active(mgr) != nil {
+		t.Fatal("user tanpa gerai: active_store harus null")
+	}
+	if r := e.do("GET", "/api/pos/context", mgr, false, nil); r.Code != 403 {
+		t.Fatalf("rute butuh gerai tanpa gerai: %d", r.Code)
+	}
+	owner := e.bearer("owner")
+	if r := e.do("GET", "/api/pos/context", owner, false, nil); r.Code != 200 {
+		t.Fatalf("owner dengan gerai: %d", r.Code)
+	}
+	_, _ = e.pool.Exec(ctx, "UPDATE stores SET is_active=false WHERE id=$1", e.seed.StoreA)
+	if active(owner) != nil {
+		t.Fatal("owner: gerai nonaktif harus dikosongkan")
+	}
+	var n int
+	_ = e.pool.QueryRow(ctx, "SELECT count(*) FROM personal_access_tokens WHERE active_store_id IS NOT NULL AND tokenable_id=$1", e.seed.Owner).Scan(&n)
+	if n != 0 {
+		t.Fatalf("active_store_id owner harus NULL di DB, ada %d", n)
+	}
+}
+
+func TestRevokeAllMenghapusTokenUser(t *testing.T) {
+	e := setup(t)
+	a, b := e.bearer("cashier"), e.bearer("cashier")
+	if err := identity.RevokeAll(context.Background(), e.pool, e.seed.Cashier); err != nil {
+		t.Fatal(err)
+	}
+	for _, tok := range []string{a, b} {
+		if r := e.do("GET", "/api/auth/me", tok, false, nil); r.Code != 401 {
+			t.Fatalf("token harus tercabut: %d", r.Code)
+		}
 	}
 }

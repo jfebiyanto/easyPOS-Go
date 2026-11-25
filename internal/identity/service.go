@@ -198,7 +198,24 @@ func (s *Service) Authenticate(ctx context.Context, raw string) (*Session, error
 		return nil, ErrUnauthenticated
 	}
 	_ = q.TouchToken(ctx, db.TouchTokenParams{ID: id, LastUsedAt: ts(now)})
-	return &Session{User: u, TokenID: id, ClientKind: t.ClientKind, ActiveStore: s.store(ctx, t.ActiveStoreID, u.CompanyID)}, nil
+	active := t.ActiveStoreID
+	if u.Role != RoleOwner {
+		// Non-owner selalu terikat ke gerai users.store_id saat ini (bisa berubah setelah login).
+		if active != u.StoreID {
+			active = u.StoreID
+			if err := q.SetTokenStore(ctx, db.SetTokenStoreParams{ID: id, ActiveStoreID: active, UpdatedAt: ts(now)}); err != nil {
+				return nil, err
+			}
+		}
+	}
+	st := s.store(ctx, active, u.CompanyID)
+	if st == nil && active.Valid {
+		// Gerai aktif sudah dihapus/nonaktif: kosongkan.
+		if err := q.SetTokenStore(ctx, db.SetTokenStoreParams{ID: id, UpdatedAt: ts(now)}); err != nil {
+			return nil, err
+		}
+	}
+	return &Session{User: u, TokenID: id, ClientKind: t.ClientKind, ActiveStore: st}, nil
 }
 
 func (s *Service) Logout(ctx context.Context, sess *Session) error {
@@ -261,4 +278,9 @@ type Company struct {
 func (s *Service) Company(ctx context.Context, id uuid.UUID) (Company, error) {
 	c, err := db.New(s.Pool).GetCompany(ctx, id)
 	return Company{ID: c.ID, Name: c.Name}, err
+}
+
+// RevokeAll menghapus semua token milik user (dipakai saat nonaktif / reset password).
+func RevokeAll(ctx context.Context, q db.DBTX, userID uuid.UUID) error {
+	return db.New(q).DeleteUserTokens(ctx, userID)
 }

@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -20,7 +21,8 @@ import (
 )
 
 const (
-	CookieName   = "easypos_token"
+	CookieBO     = "easypos_bo_token"
+	CookiePOS    = "easypos_pos_token"
 	CSRFHeader   = "X-EasyPOS-Client"
 	loginMessage = "Terlalu banyak percobaan login. Coba lagi sebentar lagi."
 )
@@ -61,12 +63,22 @@ func New(d Deps) http.Handler {
 				httpx.Error(w, http.StatusTooManyRequests, loginMessage)
 			}))).Post("/auth/login", s.login)
 
-		r.Group(func(r chi.Router) {
-			r.Use(s.authenticate)
+		authRoutes := func(r chi.Router) {
 			r.Get("/auth/me", s.me)
 			r.Post("/auth/logout", s.logout)
 			r.Get("/stores/accessible", s.accessibleStores)
 			r.Post("/session/store", s.switchStore)
+		}
+		// Klien POS memakai prefix /api/pos (cookie POS); rute yang butuh gerai memakai requireStore.
+		r.Route("/pos", func(r chi.Router) {
+			r.Use(s.authenticate)
+			authRoutes(r)
+			r.With(requireStore).Get("/context", s.posContext)
+		})
+
+		r.Group(func(r chi.Router) {
+			r.Use(s.authenticate)
+			authRoutes(r)
 
 			r.With(s.route("admin.settings-view.index")).Get("/settings", s.getSettings)
 			r.With(s.route("admin.settings.update")).Put("/settings", s.putSettings)
@@ -95,14 +107,37 @@ func loginKey(r *http.Request) (string, error) {
 	return host + "|" + in.Username, nil
 }
 
+// CookieFor memilih nama cookie berdasarkan jenis klien.
+func CookieFor(kind string) string {
+	if kind == "pos" {
+		return CookiePOS
+	}
+	return CookieBO
+}
+
 func bearer(r *http.Request) (token string, viaCookie bool) {
 	if h := r.Header.Get("Authorization"); len(h) > 7 && h[:7] == "Bearer " {
 		return h[7:], false
 	}
-	if c, err := r.Cookie(CookieName); err == nil {
+	name := CookieBO
+	if strings.HasPrefix(r.URL.Path, "/api/pos/") {
+		name = CookiePOS
+	}
+	if c, err := r.Cookie(name); err == nil {
 		return c.Value, true
 	}
 	return "", false
+}
+
+// requireStore menolak (403) rute POS bila sesi tidak punya gerai aktif.
+func requireStore(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if sess := sessionFrom(r.Context()); sess == nil || sess.ActiveStore == nil {
+			httpx.Error(w, http.StatusForbidden, "Akun belum punya gerai aktif.")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 // authenticate: token dari header Bearer atau cookie; cookie + non-GET wajib header CSRF.

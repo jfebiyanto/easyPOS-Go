@@ -21,6 +21,15 @@ func (q *Queries) DeleteToken(ctx context.Context, id int64) error {
 	return err
 }
 
+const deleteUserTokens = `-- name: DeleteUserTokens :exec
+DELETE FROM personal_access_tokens WHERE tokenable_type = 'App\Models\User' AND tokenable_id = $1
+`
+
+func (q *Queries) DeleteUserTokens(ctx context.Context, tokenableID uuid.UUID) error {
+	_, err := q.db.Exec(ctx, deleteUserTokens, tokenableID)
+	return err
+}
+
 const firstStoreByCompany = `-- name: FirstStoreByCompany :one
 SELECT id FROM stores WHERE company_id = $1 AND is_active ORDER BY code LIMIT 1
 `

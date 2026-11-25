@@ -72,7 +72,7 @@ func (s *server) login(w http.ResponseWriter, r *http.Request) {
 	if in.Client == "api" {
 		out["token"] = res.Token
 	} else {
-		http.SetCookie(w, &http.Cookie{Name: CookieName, Value: res.Token, Path: "/", HttpOnly: true,
+		http.SetCookie(w, &http.Cookie{Name: CookieFor(in.Client), Value: res.Token, Path: "/", HttpOnly: true,
 			SameSite: http.SameSiteLaxMode, Secure: s.CookieSecure})
 	}
 	httpx.JSON(w, http.StatusOK, out)
@@ -92,7 +92,7 @@ func (s *server) logout(w http.ResponseWriter, r *http.Request) {
 		httpx.Error(w, http.StatusInternalServerError, "Terjadi kesalahan server.")
 		return
 	}
-	http.SetCookie(w, &http.Cookie{Name: CookieName, Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
+	http.SetCookie(w, &http.Cookie{Name: CookieFor(sessionFrom(r.Context()).ClientKind), Value: "", Path: "/", MaxAge: -1, HttpOnly: true,
 		SameSite: http.SameSiteLaxMode, Secure: s.CookieSecure})
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -128,4 +128,9 @@ func (s *server) switchStore(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	httpx.JSON(w, http.StatusOK, map[string]any{"active_store": st})
+}
+
+func (s *server) posContext(w http.ResponseWriter, r *http.Request) {
+	sess := sessionFrom(r.Context())
+	httpx.JSON(w, http.StatusOK, map[string]any{"active_store": sess.ActiveStore, "user": sess.User.Name})
 }
