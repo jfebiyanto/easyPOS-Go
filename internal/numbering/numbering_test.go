@@ -34,6 +34,14 @@ func TestFormat(t *testing.T) {
 	}
 }
 
+func TestDefaultPrefix(t *testing.T) {
+	for typ, want := range map[string]string{"stock_counting": "CNT", "stock_adjustment": "STO", "sales": "SAL"} {
+		if got := defaultPrefix(typ); got != want {
+			t.Errorf("defaultPrefix(%s) = %s, want %s", typ, got, want)
+		}
+	}
+}
+
 func TestNextParalelDanReset(t *testing.T) {
 	pool, _, seed := testutil.NewDB(t)
 	ctx := context.Background()

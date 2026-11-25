@@ -48,6 +48,9 @@ func Known(t string) bool {
 }
 
 func defaultPrefix(t string) string {
+	if t == "stock_counting" {
+		return "CNT" // keputusan Januar 25 Nov 2026
+	}
 	if len(t) > 3 {
 		t = t[:3]
 	}
