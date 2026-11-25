@@ -1,0 +1,6 @@
+.env
+/bin/
+*.exe
+web/node_modules/
+web/dist/*
+!web/dist/.gitkeep
