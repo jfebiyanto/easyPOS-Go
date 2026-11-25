@@ -66,6 +66,7 @@ type Resource struct {
 	Expand                         []Expand
 	SearchExtra                    string // SQL tambahan untuk q, memakai {q} (placeholder parameter) dan alias t
 	NoDelete                       bool
+	Singleton                      bool // baris tunggal: id = company_id (company_details)
 
 	Validate    func(c *Ctx, merged, old Record, in map[string]any, errs validate.Errors) error
 	BeforeWrite func(c *Ctx, merged, old Record, in map[string]any) (map[string]any, error)
@@ -183,11 +184,18 @@ func deref(s *string) any {
 
 // Load membaca satu baris milik company; ErrNotFound bila tidak ada / milik company lain.
 func (e *Engine) Load(c *Ctx, r *Resource, id string) (Record, error) {
+	if r.Singleton {
+		id = c.A.CompanyID.String()
+	}
 	if _, err := uuid.Parse(id); err != nil {
 		return nil, NotFound()
 	}
 	targets, build := r.scanTargets()
-	err := c.Q.QueryRow(c.Ctx, "SELECT "+r.selectList()+" FROM "+r.Table+" t WHERE t.company_id=$1 AND t.id=$2", c.A.CompanyID, id).Scan(targets...)
+	cond, args := "t.company_id=$1 AND t.id=$2", []any{c.A.CompanyID, id}
+	if r.Singleton {
+		cond, args = "t.id=$1", []any{c.A.CompanyID}
+	}
+	err := c.Q.QueryRow(c.Ctx, "SELECT "+r.selectList()+" FROM "+r.Table+" t WHERE "+cond, args...).Scan(targets...)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, NotFound()
 	}
@@ -553,6 +561,10 @@ func (e *Engine) Save(c *Ctx, r *Resource, in map[string]any, old Record) (strin
 			}
 			vals = append(vals, c.A.CompanyID, id)
 			sql := fmt.Sprintf("UPDATE %s SET %s WHERE company_id=$%d AND id=$%d::uuid", r.Table, strings.Join(sets, ","), len(vals)-1, len(vals))
+			if r.Singleton {
+				sql = fmt.Sprintf("UPDATE %s SET %s WHERE id=$%d::uuid", r.Table, strings.Join(sets, ","), len(vals)-1)
+				vals = vals[:len(vals)-1]
+			}
 			if _, err := tx.Exec(c.Ctx, sql, vals...); err != nil {
 				return err
 			}
@@ -631,4 +643,14 @@ func (e *Engine) Delete(c *Ctx, r *Resource, id string) error {
 			Description: fmt.Sprintf("%s dihapus: %v", r.Noun, rec[displayField(r)]), Properties: map[string]any{"old": rec}})
 	})
 	return mapPgErr(err)
+}
+
+// Parse mengekspor parser satu field (dipakai handler khusus).
+func (f Field) Parse(v any) (any, string) { return f.parse(v) }
+
+// InTx menjalankan fn dalam transaksi dengan Ctx baru.
+func (e *Engine) InTx(c *Ctx, fn func(tc *Ctx) error) error {
+	return pgx.BeginFunc(c.Ctx, e.Pool, func(tx pgx.Tx) error {
+		return fn(&Ctx{Ctx: c.Ctx, Q: tx, A: c.A, E: e})
+	})
 }
