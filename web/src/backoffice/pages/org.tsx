@@ -227,9 +227,9 @@ export function CompanyPage({ me }: { me: Me }) {
   if (error) return <p role="alert" className="text-danger">{error.message}</p>
   if (!data) return <p className="text-muted">Memuat…</p>
   return (
-    <form onSubmit={(e) => { e.preventDefault(); setErrors({}); save.mutate() }} className="max-w-2xl rounded-[14px] border border-border bg-surface p-4 md:p-6">
+    <form onSubmit={(e) => { e.preventDefault(); setErrors({}); save.mutate() }} className="max-w-4xl rounded-[14px] border border-border bg-surface p-4 md:p-6">
       <h1 className="mb-4 text-xl font-semibold">Profil Perusahaan</h1>
-      <RecordForm fields={companyFields} values={values} errors={errors} isCreate={false}
+      <RecordForm columns={2} fields={companyFields} values={values} errors={errors} isCreate={false}
         onChange={(n, v) => { setValues({ ...values, [n]: v }); if (errors[n]) setErrors({ ...errors, [n]: '' }) }} />
       <button type="submit" disabled={save.isPending} className="rounded-xl bg-primary px-5 py-2.5 text-sm font-medium text-on-primary hover:bg-primary-hover disabled:opacity-60">
         {save.isPending ? 'Menyimpan…' : 'Simpan'}
