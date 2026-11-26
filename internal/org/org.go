@@ -91,7 +91,7 @@ var Currencies = crud.Resource{
 			return nil
 		}
 		for _, r := range recs {
-			rows, err := c.Q.Query(c.Ctx, "SELECT id::text, value::text FROM currency_denominations WHERE currency_id=$1 ORDER BY value", r["id"])
+			rows, err := c.Q.Query(c.Ctx, "SELECT id::text, value::text FROM currency_denominations d WHERE currency_id=$1 ORDER BY d.value", r["id"])
 			if err != nil {
 				return err
 			}

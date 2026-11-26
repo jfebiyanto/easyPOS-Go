@@ -88,7 +88,12 @@ const tsFmt = `'YYYY-MM-DD"T"HH24:MI:SS'`
 func (f Field) selectExpr(alias string) string {
 	c := alias + `."` + f.col() + `"`
 	switch f.Kind {
-	case KDec, KUUID:
+	case KDec:
+		if f.Scale > 0 {
+			return fmt.Sprintf("round(%s, %d)::text", c, f.Scale) // skala keluaran = skala validasi, bukan skala kolom
+		}
+		return c + "::text"
+	case KUUID:
 		return c + "::text"
 	case KDate:
 		return "to_char(" + c + ",'YYYY-MM-DD')"
