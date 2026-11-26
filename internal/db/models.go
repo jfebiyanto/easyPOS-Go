@@ -242,6 +242,7 @@ type PersonalAccessToken struct {
 	UpdatedAt     sql.NullTime
 	ActiveStoreID uuid.NullUUID
 	ClientKind    string
+	LockedAt      sql.NullTime
 }
 
 type PosActiveCart struct {

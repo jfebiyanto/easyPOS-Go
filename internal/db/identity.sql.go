@@ -83,7 +83,7 @@ func (q *Queries) GetStore(ctx context.Context, id uuid.UUID) (GetStoreRow, erro
 }
 
 const getToken = `-- name: GetToken :one
-SELECT id, tokenable_id, token, expires_at, last_used_at, client_kind, active_store_id
+SELECT id, tokenable_id, token, expires_at, last_used_at, created_at, locked_at, client_kind, active_store_id
 FROM personal_access_tokens WHERE id = $1 AND tokenable_type = 'App\Models\User'
 `
 
@@ -93,6 +93,8 @@ type GetTokenRow struct {
 	Token         string
 	ExpiresAt     sql.NullTime
 	LastUsedAt    sql.NullTime
+	CreatedAt     sql.NullTime
+	LockedAt      sql.NullTime
 	ClientKind    string
 	ActiveStoreID uuid.NullUUID
 }
@@ -106,6 +108,8 @@ func (q *Queries) GetToken(ctx context.Context, id int64) (GetTokenRow, error) {
 		&i.Token,
 		&i.ExpiresAt,
 		&i.LastUsedAt,
+		&i.CreatedAt,
+		&i.LockedAt,
 		&i.ClientKind,
 		&i.ActiveStoreID,
 	)
@@ -290,6 +294,20 @@ func (q *Queries) ListStoresByCompany(ctx context.Context, companyID uuid.UUID) 
 	return items, nil
 }
 
+const lockToken = `-- name: LockToken :exec
+UPDATE personal_access_tokens SET locked_at = $2 WHERE id = $1 AND locked_at IS NULL
+`
+
+type LockTokenParams struct {
+	ID       int64
+	LockedAt sql.NullTime
+}
+
+func (q *Queries) LockToken(ctx context.Context, arg LockTokenParams) error {
+	_, err := q.db.Exec(ctx, lockToken, arg.ID, arg.LockedAt)
+	return err
+}
+
 const setTokenStore = `-- name: SetTokenStore :exec
 UPDATE personal_access_tokens SET active_store_id = $2, updated_at = $3 WHERE id = $1
 `
@@ -307,7 +325,7 @@ func (q *Queries) SetTokenStore(ctx context.Context, arg SetTokenStoreParams) er
 
 const touchToken = `-- name: TouchToken :exec
 UPDATE personal_access_tokens SET last_used_at = $2
-WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < $2::timestamp - interval '1 minute')
+WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < $2::timestamp - interval '10 seconds')
 `
 
 type TouchTokenParams struct {
@@ -317,5 +335,19 @@ type TouchTokenParams struct {
 
 func (q *Queries) TouchToken(ctx context.Context, arg TouchTokenParams) error {
 	_, err := q.db.Exec(ctx, touchToken, arg.ID, arg.LastUsedAt)
+	return err
+}
+
+const unlockToken = `-- name: UnlockToken :exec
+UPDATE personal_access_tokens SET locked_at = NULL, last_used_at = $2 WHERE id = $1
+`
+
+type UnlockTokenParams struct {
+	ID         int64
+	LastUsedAt sql.NullTime
+}
+
+func (q *Queries) UnlockToken(ctx context.Context, arg UnlockTokenParams) error {
+	_, err := q.db.Exec(ctx, unlockToken, arg.ID, arg.LastUsedAt)
 	return err
 }

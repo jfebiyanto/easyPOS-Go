@@ -23,7 +23,7 @@ VALUES ('App\Models\User', $1, $2, $3, '["*"]', $4, $5, $6, $6)
 RETURNING id;
 
 -- name: GetToken :one
-SELECT id, tokenable_id, token, expires_at, last_used_at, client_kind, active_store_id
+SELECT id, tokenable_id, token, expires_at, last_used_at, created_at, locked_at, client_kind, active_store_id
 FROM personal_access_tokens WHERE id = $1 AND tokenable_type = 'App\Models\User';
 
 -- name: DeleteToken :exec
@@ -31,7 +31,13 @@ DELETE FROM personal_access_tokens WHERE id = $1;
 
 -- name: TouchToken :exec
 UPDATE personal_access_tokens SET last_used_at = $2
-WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < $2::timestamp - interval '1 minute');
+WHERE id = $1 AND (last_used_at IS NULL OR last_used_at < $2::timestamp - interval '10 seconds');
+
+-- name: LockToken :exec
+UPDATE personal_access_tokens SET locked_at = $2 WHERE id = $1 AND locked_at IS NULL;
+
+-- name: UnlockToken :exec
+UPDATE personal_access_tokens SET locked_at = NULL, last_used_at = $2 WHERE id = $1;
 
 -- name: SetTokenStore :exec
 UPDATE personal_access_tokens SET active_store_id = $2, updated_at = $3 WHERE id = $1;

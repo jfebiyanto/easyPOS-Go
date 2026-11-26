@@ -2,8 +2,9 @@ import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, type Me } from '../../shared/api'
 
-type Definition = { key: string; label: string; type: string; options: string[]; default: string }
-type Payload = { settings: Record<string, string>; definitions: Definition[] }
+type Value = string | number
+type Definition = { key: string; label: string; type: string; options: string[]; default: Value; min?: number; max?: number }
+type Payload = { settings: Record<string, Value>; definitions: Definition[] }
 
 const optionLabel: Record<string, string> = {
   reject: 'Tolak — penjualan ditolak bila serial tidak ada di stok',
@@ -15,7 +16,7 @@ export function SettingsPage({ me }: { me: Me }) {
   const qc = useQueryClient()
   const readOnly = me.permissions['admin.settings-view.index']?.readOnly ?? true
   const { data, error } = useQuery({ queryKey: ['settings'], queryFn: () => api<Payload>('/api/settings') })
-  const [draft, setDraft] = useState<Record<string, string>>({})
+  const [draft, setDraft] = useState<Record<string, Value>>({})
   const [saved, setSaved] = useState(false)
   useEffect(() => { if (data) setDraft(data.settings) }, [data])
 
@@ -31,7 +32,15 @@ export function SettingsPage({ me }: { me: Me }) {
     <form onSubmit={(e) => { e.preventDefault(); setSaved(false); save.mutate() }} className="max-w-2xl rounded-[14px] border border-border bg-surface p-6">
       <h1 className="text-xl font-semibold">Konfigurasi Sistem</h1>
       {readOnly && <p className="mt-2 rounded-xl bg-warn-soft px-3 py-2 text-sm text-warn">Hanya Owner yang dapat mengubah konfigurasi.</p>}
-      {data.definitions.map((d) => (
+      {data.definitions.map((d) => d.type === 'int' ? (
+        <div key={d.key} className="mt-5">
+          <label htmlFor={d.key} className="mb-2 block text-sm font-medium">{d.label} <code className="text-xs text-muted">{d.key}</code></label>
+          <input id={d.key} type="number" inputMode="numeric" min={d.min} max={d.max} step={1} disabled={readOnly}
+            value={draft[d.key] ?? ''} onChange={(e) => setDraft({ ...draft, [d.key]: e.target.value === '' ? '' : Number(e.target.value) })}
+            className="w-32 rounded-xl border border-border bg-surface-2 px-3 py-2 text-text" />
+          <p className="mt-1 text-sm text-muted">Berlaku untuk semua gerai dan pengguna ({d.min}–{d.max} menit).</p>
+        </div>
+      ) : (
         <fieldset key={d.key} className="mt-5" disabled={readOnly}>
           <legend className="mb-2 text-sm font-medium">{d.label} <code className="text-xs text-muted">{d.key}</code></legend>
           {d.options.map((o) => (

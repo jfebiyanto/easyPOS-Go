@@ -15,20 +15,26 @@ import (
 	"github.com/jfebiyanto/easyPOS-Go/internal/db"
 )
 
-// Definition mendeskripsikan satu kunci. Saat ini hanya tipe enum.
+// Definition mendeskripsikan satu kunci: tipe "enum" (Options) atau "int" (Min..Max).
 type Definition struct {
 	Key     string   `json:"key"`
 	Label   string   `json:"label"`
 	Type    string   `json:"type"`
 	Options []string `json:"options"`
-	Default string   `json:"default"`
+	Default any      `json:"default"`
+	Min     int      `json:"min,omitempty"`
+	Max     int      `json:"max,omitempty"`
 }
 
-const KeySerialNotInStock = "pos.serial_not_in_stock"
+const (
+	KeySerialNotInStock = "pos.serial_not_in_stock"
+	KeyIdleLockMinutes  = "security.idle_lock_minutes"
+)
 
 var Definitions = []Definition{
 	{Key: KeySerialNotInStock, Label: "Serial tidak ada di stok", Type: "enum",
 		Options: []string{"reject", "manager_approval", "allow"}, Default: "reject"},
+	{Key: KeyIdleLockMinutes, Label: "Kunci otomatis setelah idle (menit)", Type: "int", Min: 1, Max: 480, Default: 15},
 }
 
 func find(key string) (Definition, bool) {
@@ -46,6 +52,13 @@ func Validate(changes map[string]any) error {
 		d, ok := find(k)
 		if !ok {
 			return fmt.Errorf("kunci konfigurasi tidak dikenal: %s", k)
+		}
+		if d.Type == "int" {
+			n, ok := v.(float64) // JSON number
+			if !ok || n != float64(int(n)) || int(n) < d.Min || int(n) > d.Max {
+				return fmt.Errorf("%s harus bilangan bulat %d–%d", d.Label, d.Min, d.Max)
+			}
+			continue
 		}
 		s, ok := v.(string)
 		if !ok || !slices.Contains(d.Options, s) {
@@ -94,4 +107,14 @@ func Set(ctx context.Context, tx pgx.Tx, companyID, userID uuid.UUID, changes ma
 		}
 	}
 	return nil
+}
+
+// IdleLock mengembalikan batas idle (kunci sesi) company; default bila belum diatur.
+func IdleLock(ctx context.Context, tx db.DBTX, companyID uuid.UUID) time.Duration {
+	all, err := GetAll(ctx, tx, companyID)
+	n, ok := all[KeyIdleLockMinutes].(float64)
+	if err != nil || !ok || n < 1 {
+		n = 15
+	}
+	return time.Duration(n) * time.Minute
 }

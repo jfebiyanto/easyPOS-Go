@@ -54,6 +54,8 @@ func New(d Deps) http.Handler {
 		d.Log = slog.Default()
 	}
 	s := &server{d}
+	unlockLimit := httprate.Limit(d.LoginLimit, time.Minute, httprate.WithKeyFuncs(httprate.KeyByIP),
+		httprate.WithLimitHandler(func(w http.ResponseWriter, _ *http.Request) { httpx.Error(w, http.StatusTooManyRequests, loginMessage) }))
 	r := chi.NewRouter()
 	r.Use(httpx.Logging(d.Log))
 
@@ -66,6 +68,8 @@ func New(d Deps) http.Handler {
 		authRoutes := func(r chi.Router) {
 			r.Get("/auth/me", s.me)
 			r.Post("/auth/logout", s.logout)
+			r.Post("/auth/activity", s.activity)
+			r.With(unlockLimit).Post("/auth/unlock", s.unlock)
 			r.Get("/stores/accessible", s.accessibleStores)
 			r.Post("/session/store", s.switchStore)
 		}
@@ -153,6 +157,11 @@ func (s *server) authenticate(next http.Handler) http.Handler {
 			httpx.Error(w, http.StatusUnauthorized, "Tidak terautentikasi.")
 			return
 		}
+		if sess.Locked && !lockedOK(r.URL.Path) {
+			w.WriteHeader(http.StatusLocked)
+			_ = json.NewEncoder(w).Encode(map[string]any{"message": "Sesi terkunci. Masukkan password untuk melanjutkan.", "locked": true})
+			return
+		}
 		if viaCookie && r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions &&
 			r.Header.Get(CSRFHeader) != "1" {
 			httpx.Error(w, http.StatusForbidden, "Header "+CSRFHeader+" wajib untuk request ini.")
@@ -174,4 +183,14 @@ func (s *server) route(key string) func(http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 		})
 	}
+}
+
+// lockedOK: satu-satunya rute yang boleh dipakai sesi terkunci.
+func lockedOK(path string) bool {
+	for _, p := range []string{"/auth/me", "/auth/unlock", "/auth/logout"} {
+		if strings.HasSuffix(path, p) {
+			return true
+		}
+	}
+	return false
 }

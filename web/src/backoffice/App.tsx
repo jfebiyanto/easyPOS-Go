@@ -1,6 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Route, Routes } from 'react-router-dom'
 import { api, type Me } from '../shared/api'
+import { IdleLock } from '../shared/IdleLock'
 import { Login } from '../shared/Login'
 import { Layout } from './Layout'
 import { allItems } from './menu'
@@ -16,7 +17,14 @@ export function App() {
   if (isLoading) return <p className="p-6 text-muted">Memuat…</p>
   if (!me) return <Login client="backoffice" title="Masuk ke Backoffice" onDone={(u) => qc.setQueryData(['me'], u)} />
 
+  async function logout() {
+    await api('/api/auth/logout', { method: 'POST' }).catch(() => {})
+    qc.clear()
+    qc.setQueryData(['me'], null)
+  }
+
   return (
+    <IdleLock me={me} onLogout={logout}>
     <Layout me={me}>
       <Routes>
         <Route path="/" element={<Dashboard me={me} />} />
@@ -28,5 +36,6 @@ export function App() {
         <Route path="*" element={<ComingSoon title="Halaman tidak ditemukan" />} />
       </Routes>
     </Layout>
+    </IdleLock>
   )
 }

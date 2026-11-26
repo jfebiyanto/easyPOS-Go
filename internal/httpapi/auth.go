@@ -3,11 +3,13 @@ package httpapi
 import (
 	"errors"
 	"net/http"
+	"time"
 
 	"github.com/google/uuid"
 
 	"github.com/jfebiyanto/easyPOS-Go/internal/identity"
 	"github.com/jfebiyanto/easyPOS-Go/internal/platform/httpx"
+	"github.com/jfebiyanto/easyPOS-Go/internal/settings"
 )
 
 type meResponse struct {
@@ -20,6 +22,8 @@ type meResponse struct {
 	ActiveStore *identity.StoreRef             `json:"active_store"`
 	Company     identity.Company               `json:"company"`
 	Permissions map[string]identity.Permission `json:"permissions"`
+	Locked      bool                           `json:"locked"`
+	IdleLockMin int                            `json:"idle_lock_minutes"`
 }
 
 func (s *server) buildMe(r *http.Request, sess *identity.Session) (meResponse, error) {
@@ -29,7 +33,8 @@ func (s *server) buildMe(r *http.Request, sess *identity.Session) (meResponse, e
 		return meResponse{}, err
 	}
 	m := meResponse{ID: u.ID, Name: u.Name, Username: u.Username, Role: u.Role, ActiveStore: sess.ActiveStore,
-		Company: co, Permissions: identity.Permissions(u.Role)}
+		Company: co, Permissions: identity.Permissions(u.Role), Locked: sess.Locked,
+		IdleLockMin: int(settings.IdleLock(r.Context(), s.Pool, u.CompanyID) / time.Minute)}
 	if u.Email.Valid {
 		m.Email = &u.Email.String
 	}
@@ -133,4 +138,27 @@ func (s *server) switchStore(w http.ResponseWriter, r *http.Request) {
 func (s *server) posContext(w http.ResponseWriter, r *http.Request) {
 	sess := sessionFrom(r.Context())
 	httpx.JSON(w, http.StatusOK, map[string]any{"active_store": sess.ActiveStore, "user": sess.User.Name})
+}
+
+// activity: heartbeat klien; authenticate sudah men-touch sesi (sesi terkunci tidak sampai sini).
+func (s *server) activity(w http.ResponseWriter, _ *http.Request) {
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *server) unlock(w http.ResponseWriter, r *http.Request) {
+	var in struct {
+		Password string `json:"password"`
+	}
+	if err := httpx.Decode(r, &in); err != nil || in.Password == "" {
+		httpx.Error(w, http.StatusUnprocessableEntity, "Password wajib diisi.")
+		return
+	}
+	switch err := s.Identity.Unlock(r.Context(), sessionFrom(r.Context()), in.Password); {
+	case errors.Is(err, identity.ErrInvalidCredentials):
+		httpx.Error(w, http.StatusUnprocessableEntity, "Password salah.")
+	case err != nil:
+		httpx.Error(w, http.StatusInternalServerError, "Terjadi kesalahan server.")
+	default:
+		w.WriteHeader(http.StatusNoContent)
+	}
 }

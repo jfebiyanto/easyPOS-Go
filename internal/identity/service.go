@@ -23,6 +23,7 @@ import (
 
 	"github.com/jfebiyanto/easyPOS-Go/internal/audit"
 	"github.com/jfebiyanto/easyPOS-Go/internal/db"
+	"github.com/jfebiyanto/easyPOS-Go/internal/settings"
 )
 
 var (
@@ -54,6 +55,7 @@ type Session struct {
 	TokenID     int64
 	ClientKind  string
 	ActiveStore *StoreRef
+	Locked      bool // idle melewati batas: hanya me/unlock/logout yang boleh
 }
 
 type LoginInput struct {
@@ -197,6 +199,21 @@ func (s *Service) Authenticate(ctx context.Context, raw string) (*Session, error
 	if err != nil || !u.IsActive {
 		return nil, ErrUnauthenticated
 	}
+	// Kunci idle: batas per company (berlaku semua gerai). Sesi terkunci tidak di-touch.
+	last := t.CreatedAt.Time
+	if t.LastUsedAt.Valid {
+		last = t.LastUsedAt.Time
+	}
+	if t.LockedAt.Valid || now.Sub(last) > settings.IdleLock(ctx, s.Pool, u.CompanyID) {
+		if !t.LockedAt.Valid {
+			if err := q.LockToken(ctx, db.LockTokenParams{ID: id, LockedAt: ts(now)}); err != nil {
+				return nil, err
+			}
+			_ = audit.Log(ctx, s.Pool, audit.Entry{CompanyID: u.CompanyID, ActorID: u.ID, ActorName: u.Name, Action: "auth.locked",
+				SubjectType: "user", SubjectID: u.ID, Description: u.Username + " terkunci (idle)", StoreID: t.ActiveStoreID.UUID})
+		}
+		return &Session{User: u, TokenID: id, ClientKind: t.ClientKind, ActiveStore: s.store(ctx, t.ActiveStoreID, u.CompanyID), Locked: true}, nil
+	}
 	_ = q.TouchToken(ctx, db.TouchTokenParams{ID: id, LastUsedAt: ts(now)})
 	active := t.ActiveStoreID
 	if u.Role != RoleOwner {
@@ -216,6 +233,22 @@ func (s *Service) Authenticate(ctx context.Context, raw string) (*Session, error
 		}
 	}
 	return &Session{User: u, TokenID: id, ClientKind: t.ClientKind, ActiveStore: st}, nil
+}
+
+// Unlock membuka sesi terkunci bila password user benar.
+func (s *Service) Unlock(ctx context.Context, sess *Session, password string) error {
+	u := sess.User
+	if bcrypt.CompareHashAndPassword([]byte(u.Password), []byte(password)) != nil {
+		_ = audit.Log(ctx, s.Pool, audit.Entry{CompanyID: u.CompanyID, ActorID: u.ID, ActorName: u.Name, Action: "auth.unlock_failed",
+			SubjectType: "user", SubjectID: u.ID, Description: "Buka kunci gagal untuk " + u.Username, StoreID: StoreID(sess)})
+		return ErrInvalidCredentials
+	}
+	if err := db.New(s.Pool).UnlockToken(ctx, db.UnlockTokenParams{ID: sess.TokenID, LastUsedAt: ts(s.Now())}); err != nil {
+		return err
+	}
+	sess.Locked = false
+	return audit.Log(ctx, s.Pool, audit.Entry{CompanyID: u.CompanyID, ActorID: u.ID, ActorName: u.Name, Action: "auth.unlocked",
+		SubjectType: "user", SubjectID: u.ID, Description: u.Username + " membuka kunci", StoreID: StoreID(sess)})
 }
 
 func (s *Service) Logout(ctx context.Context, sess *Session) error {

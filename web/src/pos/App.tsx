@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { LogOut, ShoppingCart, Wifi, WifiOff } from 'lucide-react'
 import { api, type Me } from '../shared/api'
+import { IdleLock } from '../shared/IdleLock'
 import { Login } from '../shared/Login'
 import { ThemeToggle } from '../shared/ThemeToggle'
 
@@ -38,6 +39,7 @@ export function App() {
   }
 
   return (
+    <IdleLock me={me} onLogout={logout}>
     <div className="flex h-full flex-col bg-bg">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-surface px-4 py-3">
         <span className="flex items-center gap-2 font-bold"><ShoppingCart size={18} aria-hidden="true" /> easyPOS</span>
@@ -58,5 +60,6 @@ export function App() {
         <p className="rounded-2xl border border-dashed border-border bg-surface px-8 py-10 text-muted">POS akan dibangun di fase 3.</p>
       </main>
     </div>
+    </IdleLock>
   )
 }
