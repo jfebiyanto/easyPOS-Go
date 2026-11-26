@@ -1,7 +1,7 @@
 import { useId, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
-import { cleanMoney, formatNpwp, npwpError, tabNames, type FieldDef, type Opt, type Row, type Values } from './crudLogic'
+import { cleanMoney, emailError, formatNpwp, npwpError, tabNames, type FieldDef, type Opt, type Row, type Values } from './crudLogic'
 
 export const inputCls =
   'w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm text-text disabled:opacity-60 aria-[invalid=true]:border-danger'
@@ -112,6 +112,9 @@ export function RecordForm({ fields, values, errors, onChange, isCreate, disable
                   return f.ref
                     ? <RefSelect f={f} {...a} value={String(v ?? '')} onChange={set} />
                     : <Select {...a} options={f.options ?? []} value={String(v ?? '')} onChange={set} />
+                case 'email':
+                  return <input {...a} type="email" maxLength={f.maxLength} autoComplete="off" value={String(v ?? '')} onChange={(e) => set(e.target.value)}
+                    onBlur={() => setBlurErrors((p) => ({ ...p, [f.name]: emailError(String(v ?? '')) }))} className={inputCls} />
                 case 'npwp':
                   return <input {...a} type="text" inputMode="numeric" maxLength={19} placeholder="00.0000.000000.0000" autoComplete="off"
                     value={String(v ?? '')} onChange={(e) => set(e.target.value)} onBlur={() => { const t = String(v ?? ''); onChange(f.name, formatNpwp(t)); setBlurErrors((p) => ({ ...p, [f.name]: npwpError(t) })) }} className={inputCls} />

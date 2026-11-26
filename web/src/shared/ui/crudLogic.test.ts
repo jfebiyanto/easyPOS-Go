@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api'
-import { buildPayload, cleanMoney, conversionText, fieldErrors, formatDecimal, formatNpwp, initialValues, nextSort, npwpDigits, npwpError, type FieldDef } from './crudLogic'
+import { buildPayload, cleanMoney, conversionText, emailError, fieldErrors, formatDecimal, formatNpwp, initialValues, nextSort, npwpDigits, npwpError, type FieldDef } from './crudLogic'
 
 const fields: FieldDef[] = [
   { name: 'code', label: 'Kode', type: 'text', required: true },
@@ -105,5 +105,12 @@ describe('NPWP', () => {
     expect(v.npwp).toBe('01.2345.678901.2345')
     expect(buildPayload(f, v, false)).toEqual({ npwp: '0123456789012345' })
     expect(buildPayload(f, { npwp: '' }, false)).toEqual({ npwp: null })
+  })
+})
+
+describe('email', () => {
+  it('wajib ada @ dan domain bertitik; kosong lolos', () => {
+    for (const ok of ['a@b.co', 'nama.x+y@toko.co.id', '']) expect(emailError(ok)).toBe('')
+    for (const bad of ['abc', 'a@b', 'a@.com', 'a@b.', '@b.com', 'a b@c.com', 'a@@b.com']) expect(emailError(bad)).toBe('Format email tidak valid.')
   })
 })

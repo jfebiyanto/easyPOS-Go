@@ -22,7 +22,7 @@ export type CustomCtx = {
 export type FieldDef = {
   name: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'money' | 'switch' | 'select' | 'password' | 'date' | 'npwp' | 'custom'
+  type: 'text' | 'textarea' | 'number' | 'money' | 'switch' | 'select' | 'password' | 'date' | 'npwp' | 'email' | 'custom'
   /** Hanya type 'custom': render sendiri; nilai dibawa apa adanya ke payload. */
   render?: (c: CustomCtx) => ReactNode
   /** Nilai awal field custom dari record (edit). */
@@ -69,6 +69,9 @@ export function formatNpwp(s: string): string {
 /** Pesan salah bila NPWP terisi tapi bukan 16 digit; kosong dianggap valid (wajib-tidaknya urusan field). */
 export const npwpError = (s: string): string => (npwpDigits(s) && npwpDigits(s).length !== 16 ? 'NPWP harus 16 digit angka.' : '')
 
+/** Pesan salah bila terisi tapi bukan alamat email (ada @, domain bertitik, tanpa spasi); kosong lolos. */
+export const emailError = (s: string): string => (s.trim() === '' || /^[^\s@]+@[^\s@.]+(\.[^\s@.]+)+$/.test(s.trim()) ? '' : 'Format email tidak valid.')
+
 /** Payload ke API: string kosong -> null (kecuali wajib), number -> Number, field tersembunyi/createOnly/password kosong dibuang. */
 export function buildPayload(fields: FieldDef[], values: Values, isCreate: boolean): Row {
   const out: Row = {}
@@ -82,6 +85,7 @@ export function buildPayload(fields: FieldDef[], values: Values, isCreate: boole
     else if (f.type === 'switch') out[f.name] = !!v
     else if (v === '' || v == null) out[f.name] = f.required ? '' : null
     else if (f.type === 'number') out[f.name] = Number(v)
+    else if (f.type === 'email') out[f.name] = String(v).trim()
     else if (f.type === 'npwp') out[f.name] = npwpDigits(String(v)) || (f.required ? '' : null)
     else out[f.name] = v
   }

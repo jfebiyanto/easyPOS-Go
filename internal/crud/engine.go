@@ -313,7 +313,7 @@ func (f Field) parse(v any) (any, string) {
 			return nil, fmt.Sprintf("Maksimal %d karakter.", f.Max)
 		}
 		if f.Email {
-			if a, err := mail.ParseAddress(s); err != nil || a.Address != s {
+			if a, err := mail.ParseAddress(s); err != nil || a.Address != s || !strings.Contains(s[strings.LastIndex(s, "@")+1:], ".") { // domain wajib bertitik
 				return nil, "Format email tidak valid."
 			}
 		}

@@ -279,6 +279,9 @@ func TestCompanyProfile(t *testing.T) {
 	if d["name"] != "PT Uji Jaya" || d["email"] != "a@b.co" {
 		t.Fatalf("%v", d)
 	}
+	if r := e.do("PUT", "/api/company", owner, false, base(m{"email": "a@b"})); r.Code != 422 || !errField(r, "email") {
+		t.Fatalf("email tanpa titik harus ditolak: %d %v", r.Code, r.Body)
+	}
 	if d["npwp_number"] != "0123456789012345" {
 		t.Fatalf("npwp harus tersimpan 16 digit tanpa pemisah: %v", d["npwp_number"])
 	}

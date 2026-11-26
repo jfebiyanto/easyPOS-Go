@@ -180,7 +180,7 @@ const users: CrudConfig = {
   fields: [
     { name: 'name', label: 'Nama', type: 'text', required: true, maxLength: 150 },
     { name: 'username', label: 'Username', type: 'text', required: true, maxLength: 60, hint: 'Huruf, angka, strip, dan underscore.' },
-    { name: 'email', label: 'Email', type: 'text', maxLength: 150 },
+    { name: 'email', label: 'Email', type: 'email', maxLength: 150 },
     { name: 'phone', label: 'Telepon', type: 'text', maxLength: 30 },
     { name: 'role', label: 'Peran', type: 'select', required: true, options: roleOpts },
     { name: 'store_id', label: 'Gerai', type: 'select', ref: { path: '/api/stores', label: (r) => `${r.code} · ${r.name}` }, showWhen: (v) => v.role !== 'owner', required: true },
@@ -197,7 +197,7 @@ const companyFields: FieldDef[] = [
   { name: 'address', label: 'Alamat', type: 'textarea', maxLength: 500 },
   { name: 'npwp_number', label: 'NPWP', type: 'npwp', hint: '16 digit' },
   { name: 'phone', label: 'Telepon', type: 'text', maxLength: 30 },
-  { name: 'email', label: 'Email', type: 'text', maxLength: 150 },
+  { name: 'email', label: 'Email', type: 'email', maxLength: 150 },
   { name: 'base_currency_code', label: 'Mata uang dasar', type: 'select', required: true, ref: { path: '/api/currencies', value: 'code', label: (r) => `${r.code} · ${r.symbol}` } },
   { name: 'timezone', label: 'Zona waktu', type: 'text', required: true, hint: 'Nama IANA, mis. Asia/Jakarta.' },
   { name: 'ppn_enabled', label: 'PPN aktif', type: 'switch' },
