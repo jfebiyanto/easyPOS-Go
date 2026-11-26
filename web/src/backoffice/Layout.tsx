@@ -3,14 +3,14 @@ import { NavLink, useLocation } from 'react-router-dom'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as Dropdown from '@radix-ui/react-dropdown-menu'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ChevronDown, LogOut, Menu, Store, X } from 'lucide-react'
+import { Check, ChevronDown, LogOut, Menu, PanelLeftClose, PanelLeftOpen, Store, X } from 'lucide-react'
 import { api, roleLabel, type Me, type StoreRef } from '../shared/api'
-import { Logo } from '../shared/Logo'
+import { Logo, LogoMark } from '../shared/Logo'
 import { ThemeToggle } from '../shared/ThemeToggle'
 import { menu } from './menu'
-import { NAV_KEY, parseCollapsed, toggle } from './navState'
+import { NAV_KEY, RAIL_KEY, parseCollapsed, toggle } from './navState'
 
-function Nav({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
+function Nav({ me, onNavigate, compact = false }: { me: Me; onNavigate?: () => void; compact?: boolean }) {
   const { pathname } = useLocation()
   const [collapsed, setCollapsed] = useState(() => {
     try { return parseCollapsed(localStorage.getItem(NAV_KEY)) } catch { return [] }
@@ -21,17 +21,17 @@ function Nav({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
     try { localStorage.setItem(NAV_KEY, JSON.stringify(next)) } catch { /* penyimpanan diblokir: state tetap di memori */ }
   }
   return (
-    <nav aria-label="Menu utama" className="flex flex-col gap-3 p-4">
+    <nav aria-label="Menu utama" className={`flex flex-col gap-3 ${compact ? 'items-center px-2 py-4' : 'p-4'}`}>
       {menu.map((g) => {
         const items = g.items.filter((i) => me.permissions[i.key]?.visible)
         if (!items.length) return null
         // grup yang memuat halaman aktif tidak boleh tersembunyi
         const hasActive = items.some((i) => (i.path === '/' ? pathname === '/' : pathname.startsWith(i.path)))
-        const open = hasActive || !collapsed.includes(g.label)
+        const open = compact || hasActive || !collapsed.includes(g.label)
         const single = g.items.length === 1
         return (
-          <div key={g.label}>
-            {!single && (
+          <div key={g.label} className={compact ? 'flex flex-col items-center gap-1 border-b border-border pb-3 last:border-0' : undefined}>
+            {!single && !compact && (
               <button type="button" onClick={() => flip(g.label)} aria-expanded={open} aria-controls={`nav-${g.label}`}
                 className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted hover:bg-surface-2">
                 {g.label}
@@ -39,13 +39,14 @@ function Nav({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
               </button>
             )}
             {open && (
-              <div id={`nav-${g.label}`}>
+              <div id={`nav-${g.label}`} className={compact ? 'flex flex-col items-center gap-1' : undefined}>
                 {items.map(({ path, label, icon: Icon }) => (
                   <NavLink key={path} to={path} end={path === '/'} onClick={onNavigate}
+                    title={compact ? label : undefined} aria-label={compact ? label : undefined}
                     className={({ isActive }) =>
-                      `flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium ${isActive ? 'bg-primary-soft text-primary-text' : 'text-text hover:bg-surface-2'}`}>
+                      `flex items-center gap-3 rounded-xl py-2 text-sm font-medium ${compact ? 'justify-center px-2.5' : 'px-3'} ${isActive ? 'bg-primary-soft text-primary-text' : 'text-text hover:bg-surface-2'}`}>
                     <Icon size={18} aria-hidden="true" />
-                    {label}
+                    {!compact && label}
                   </NavLink>
                 ))}
               </div>
@@ -127,11 +128,25 @@ function UserMenu({ me }: { me: Me }) {
 
 export function Layout({ me, children }: { me: Me; children: ReactNode }) {
   const [open, setOpen] = useState(false)
+  const [rail, setRail] = useState(() => {
+    try { return localStorage.getItem(RAIL_KEY) === '1' } catch { return false }
+  })
+  function flipRail() {
+    setRail(!rail)
+    try { localStorage.setItem(RAIL_KEY, rail ? '0' : '1') } catch { /* diblokir: hanya berlaku di sesi ini */ }
+  }
   return (
     <div className="flex h-full bg-bg">
-      <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-border bg-surface md:block">
-        <div className="px-4 pt-4"><Logo className="h-auto w-full" /></div>
-        <Nav me={me} />
+      <aside className={`hidden shrink-0 flex-col overflow-y-auto border-r border-border bg-surface transition-[width] md:flex ${rail ? 'w-16' : 'w-64'}`}>
+        <div className={rail ? 'flex justify-center px-2 pt-4' : 'px-4 pt-4'}>
+          {rail ? <LogoMark className="h-10 w-10" /> : <Logo className="h-auto w-full" />}
+        </div>
+        <Nav me={me} compact={rail} />
+        <button type="button" onClick={flipRail} aria-pressed={rail} title={rail ? 'Perluas menu' : 'Kecilkan menu'}
+          aria-label={rail ? 'Perluas menu samping' : 'Kecilkan menu samping'}
+          className={`sticky bottom-0 mt-auto flex items-center gap-3 border-t border-border bg-surface px-5 py-3 text-sm text-muted hover:text-text ${rail ? 'justify-center' : ''}`}>
+          {rail ? <PanelLeftOpen size={18} aria-hidden="true" /> : <><PanelLeftClose size={18} aria-hidden="true" /> Kecilkan menu</>}
+        </button>
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="flex items-center justify-between gap-3 border-b border-border bg-surface px-4 py-3">

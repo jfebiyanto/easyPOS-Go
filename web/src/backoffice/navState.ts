@@ -1,3 +1,4 @@
+export const RAIL_KEY = 'easypos.nav.rail'
 export const NAV_KEY = 'easypos.nav.collapsed'
 
 /** Daftar label grup yang diciutkan, dari localStorage; nilai rusak = kosong (semua terbuka). */
