@@ -43,7 +43,7 @@ export function App() {
     <IdleLock me={me} onLogout={logout}>
     <div className="flex h-full flex-col bg-bg">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-surface px-4 py-3">
-        <Logo className="h-9" />
+        <Logo className="h-14 w-auto" />
         <span className="text-sm text-muted">{me.active_store?.name ?? 'Tanpa gerai'} · {me.name}</span>
         <span className="ml-auto flex items-center gap-4 text-sm">
           <span className={`flex items-center gap-1.5 ${online ? 'text-text' : 'text-warn'}`}>

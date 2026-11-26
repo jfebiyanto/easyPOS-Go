@@ -61,7 +61,7 @@ function LockScreen({ me, onUnlocked, onLogout }: { me: Me; onUnlocked: () => vo
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="lock-title" className="fixed inset-0 z-50 flex items-center justify-center bg-bg p-4">
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-sm">
-        <LogoMark className="mb-3 h-14" />
+        <LogoMark className="mx-auto mb-3 h-24 w-24" />
         <h1 id="lock-title" className="text-xl font-semibold text-text">Sesi terkunci</h1>
         <p className="mb-5 mt-1 text-sm text-muted">Terkunci karena tidak ada aktivitas. Masukkan password {me.name} untuk melanjutkan.</p>
         <label htmlFor="unlock-password" className="mb-1 block text-sm font-medium">Password</label>

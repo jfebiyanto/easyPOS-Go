@@ -29,8 +29,8 @@ export function Login({ client, title, onDone }: { client: 'backoffice' | 'pos';
         <ThemeToggle />
       </div>
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-sm">
-        <Logo className="mb-3 h-14" />
-        <h1 className="mb-5 text-sm text-muted">{title}</h1>
+        <Logo className="mx-auto mb-2 h-auto w-full max-w-72" />
+        <h1 className="mb-5 text-center text-sm text-muted">{title}</h1>
         <label htmlFor="username" className="mb-1 block text-sm font-medium">Username</label>
         <input id="username" autoComplete="username" required value={username} onChange={(e) => setUsername(e.target.value)}
           className="mb-3 w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-text" />

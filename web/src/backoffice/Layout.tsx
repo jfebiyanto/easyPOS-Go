@@ -106,7 +106,7 @@ export function Layout({ me, children }: { me: Me; children: ReactNode }) {
   return (
     <div className="flex h-full bg-bg">
       <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-border bg-surface md:block">
-        <div className="px-5 pt-5"><Logo className="h-12" /></div>
+        <div className="px-4 pt-4"><Logo className="h-auto w-full" /></div>
         <Nav me={me} />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
@@ -118,7 +118,7 @@ export function Layout({ me, children }: { me: Me; children: ReactNode }) {
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50" />
               <Dialog.Content className="fixed inset-y-0 left-0 z-50 w-72 overflow-y-auto bg-surface">
-                <div className="px-5 pt-5"><Logo className="h-12" /></div>
+                <div className="px-4 pt-4"><Logo className="h-auto w-full" /></div>
                 <Dialog.Title className="sr-only">easyPOS</Dialog.Title>
                 <Dialog.Description className="sr-only">Navigasi menu backoffice</Dialog.Description>
                 <Dialog.Close className="absolute right-3 top-3 rounded-lg p-2" aria-label="Tutup menu"><X size={18} aria-hidden="true" /></Dialog.Close>

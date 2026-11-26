@@ -61,6 +61,7 @@ html, body, #root { height: 100%; }
 body { background: var(--bg); color: var(--text); font-family: var(--font-sans); }
 :focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
 
+.logo-light, .logo-dark { display: block; }
 .logo-dark { display: none; }
 :root[data-theme="dark"] .logo-light { display: none; }
-:root[data-theme="dark"] .logo-dark { display: inline; }
+:root[data-theme="dark"] .logo-dark { display: block; }
