@@ -21,6 +21,7 @@ import (
 	"github.com/jfebiyanto/easyPOS-Go/internal/identity"
 	"github.com/jfebiyanto/easyPOS-Go/internal/org"
 	"github.com/jfebiyanto/easyPOS-Go/internal/platform/httpx"
+	"github.com/jfebiyanto/easyPOS-Go/internal/platform/storage"
 )
 
 const (
@@ -38,6 +39,7 @@ type Deps struct {
 	CookieSecure bool
 	LoginLimit   int // percobaan/menit per IP+username; default 5
 	Web          WebFS
+	StorageDir   string // akar file unggahan; kosong = ./storage
 }
 
 type server struct{ Deps }
@@ -55,6 +57,9 @@ func New(d Deps) http.Handler {
 	}
 	if d.Log == nil {
 		d.Log = slog.Default()
+	}
+	if d.StorageDir == "" {
+		d.StorageDir = "./storage"
 	}
 	s := &server{d}
 	binder := &crud.Binder{E: crud.NewEngine(d.Pool), Route: s.route, Actor: func(r *http.Request) crud.Actor {
@@ -94,13 +99,14 @@ func New(d Deps) http.Handler {
 			r.With(s.route("admin.settings-view.index")).Get("/settings", s.getSettings)
 			r.With(s.route("admin.settings.update")).Put("/settings", s.putSettings)
 			org.Mount(binder, r)
-			catalog.Mount(binder, r)
+			catalog.Mount(binder, r, d.StorageDir)
 			r.With(s.route("admin.numberings.index")).Get("/numberings", s.getNumberings)
 			r.With(s.route("admin.numberings.update")).Put("/numberings", s.putNumberings)
 			r.With(s.route("admin.numberings.next")).Post("/numberings/{type}/next", s.nextNumber)
 		})
 		r.NotFound(func(w http.ResponseWriter, _ *http.Request) { httpx.Error(w, http.StatusNotFound, "Tidak ditemukan.") })
 	})
+	r.Handle("/media/*", http.StripPrefix("/media/", storage.Handler(d.StorageDir)))
 	mountWeb(r, d.Web)
 	return r
 }

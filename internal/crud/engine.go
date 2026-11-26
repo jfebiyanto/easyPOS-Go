@@ -73,6 +73,7 @@ type Resource struct {
 	AfterSave   func(c *Ctx, id string, merged, old Record, in map[string]any) error
 	Locked      func(c *Ctx, rec Record) string
 	CanDelete   func(c *Ctx, rec Record) (string, error)
+	AfterDelete func(c *Ctx, rec Record) // setelah commit, best-effort (mis. hapus file)
 	Decorate    func(c *Ctx, recs []Record, detail bool) error
 }
 
@@ -647,6 +648,9 @@ func (e *Engine) Delete(c *Ctx, r *Resource, id string) error {
 			Action: r.Entity + ".deleted", SubjectType: r.Entity, SubjectID: uuid.MustParse(id),
 			Description: fmt.Sprintf("%s dihapus: %v", r.Noun, rec[displayField(r)]), Properties: map[string]any{"old": rec}})
 	})
+	if err == nil && r.AfterDelete != nil {
+		r.AfterDelete(c, rec)
+	}
 	return mapPgErr(err)
 }
 

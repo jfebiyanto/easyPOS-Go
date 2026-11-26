@@ -141,6 +141,22 @@ func (b *Binder) list(res *Resource) http.HandlerFunc {
 		if order == "" {
 			order = "t.created_at DESC"
 		}
+		// ?sort=<field>&dir=asc|desc: hanya field kolom nyata (bukan Virtual); selain itu diabaikan.
+		for _, f := range res.Fields {
+			if f.Name != qs.Get("sort") || f.Virtual {
+				continue
+			}
+			col := fmt.Sprintf(`t."%s"`, f.col())
+			if f.Kind == KStr {
+				col = "lower(" + col + ")"
+			}
+			dir := "ASC"
+			if qs.Get("dir") == "desc" {
+				dir = "DESC"
+			}
+			order = col + " " + dir
+			break
+		}
 		sql := fmt.Sprintf("SELECT %s FROM %s t WHERE %s ORDER BY %s, t.id LIMIT %d OFFSET %d", res.selectList(), res.Table, w8, order, per, (page-1)*per)
 		rows, err := c.Q.Query(c.Ctx, sql, args...)
 		if err != nil {

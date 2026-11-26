@@ -16,11 +16,13 @@ export function setLockedHandler(fn: () => void) {
 
 /** Satu-satunya pintu request ke backend: cookie sesi + header CSRF. */
 export async function api<T = unknown>(path: string, opts: { method?: string; body?: unknown } = {}): Promise<T> {
+  const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData
   const res = await fetch(path, {
     method: opts.method ?? 'GET',
     credentials: 'include',
-    headers: { 'X-EasyPOS-Client': '1', ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
-    body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,
+    // FormData: biarkan browser mengisi Content-Type (boundary multipart).
+    headers: { 'X-EasyPOS-Client': '1', ...(opts.body !== undefined && !isForm ? { 'Content-Type': 'application/json' } : {}) },
+    body: opts.body === undefined ? undefined : isForm ? (opts.body as FormData) : JSON.stringify(opts.body),
   })
   if (res.status === 204) return undefined as T
   const data = await res.json().catch(() => ({}))

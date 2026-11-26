@@ -6,7 +6,18 @@ export type Values = Record<string, unknown>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Row = Record<string, any>
 
-export type CustomCtx = { values: Values; set: (v: unknown) => void; errors: Record<string, string>; disabled?: boolean }
+export type CustomCtx = {
+  values: Values
+  set: (v: unknown) => void
+  errors: Record<string, string>
+  disabled?: boolean
+  /** Ubah field lain (mis. satuan dasar mengikuti UoM group). */
+  setField: (name: string, v: unknown) => void
+  /** Record dari server saat edit (null saat tambah). */
+  record: Row | null
+  /** Muat ulang daftar + detail setelah aksi di luar formulir (mis. unggah gambar). */
+  refresh: () => void
+}
 
 export type FieldDef = {
   name: string
@@ -24,6 +35,12 @@ export type FieldDef = {
   ref?: { path: string; value?: string; label: (r: Row) => string }
   createOnly?: boolean
   showWhen?: (v: Values) => boolean
+  /** Nonaktif (read-only) secara kondisional. */
+  disabledWhen?: (v: Values) => boolean
+  /** Nama tab di formulir bertab; field tanpa tab ikut tab pertama. */
+  tab?: string
+  /** Tidak ikut payload (mis. unggah gambar yang punya endpoint sendiri). */
+  noPayload?: boolean
   maxLength?: number
 }
 
@@ -46,9 +63,10 @@ export function buildPayload(fields: FieldDef[], values: Values, isCreate: boole
   for (const f of fields) {
     if (f.showWhen && !f.showWhen(values)) continue
     if (f.createOnly && !isCreate) continue
+    if (f.noPayload) continue
     const v = values[f.name]
     if (f.type === 'password' && (v === '' || v == null)) continue
-    if (f.type === 'custom') out[f.name] = v
+    if (f.type === 'custom') out[f.name] = v === '' || v == null ? (f.required ? '' : null) : v
     else if (f.type === 'switch') out[f.name] = !!v
     else if (v === '' || v == null) out[f.name] = f.required ? '' : null
     else if (f.type === 'number') out[f.name] = Number(v)
@@ -82,4 +100,30 @@ export function formatDecimal(s: string | null | undefined): string {
 export function conversionText(alt: string, unitCode: string, base: string, baseCode: string): string {
   const trim = (s: string) => (s.includes('.') ? s.replace(/\.?0+$/, '') : s)
   return `${trim(alt || '0')} ${unitCode || '?'} = ${trim(base || '0')} ${baseCode || '?'}`
+}
+
+export type Sort = { key: string; dir: 'asc' | 'desc' }
+
+/** Klik header: kolom baru → asc; kolom yang sama → asc↔desc. */
+export function nextSort(cur: Sort, key: string): Sort {
+  return cur.key === key ? { key, dir: cur.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: 'asc' }
+}
+
+/** Urutan nama tab (menurut kemunculan pertama); field tanpa tab ikut tab pertama. */
+export function tabNames(fields: FieldDef[]): string[] {
+  const out: string[] = []
+  for (const f of fields) if (f.tab && !out.includes(f.tab)) out.push(f.tab)
+  return out
+}
+
+/** Tab yang berisi error (kunci error bisa bersarang, mis. "barcodes.0.code" milik field "barcodes"). */
+export function tabsWithErrors(fields: FieldDef[], errors: Record<string, string>): Set<string> {
+  const tabs = tabNames(fields)
+  const out = new Set<string>()
+  for (const [k, msg] of Object.entries(errors)) {
+    if (!msg) continue
+    const f = fields.find((x) => k === x.name || k.startsWith(x.name + '.'))
+    if (f) out.add(f.tab ?? tabs[0])
+  }
+  return out
 }

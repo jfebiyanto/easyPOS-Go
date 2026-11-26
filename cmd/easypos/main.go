@@ -59,7 +59,7 @@ func serveCmd() *cobra.Command {
 		}
 		log := slog.Default()
 		srv := &http.Server{Addr: cfg.HTTPAddr, ReadHeaderTimeout: 10 * time.Second, Handler: httpapi.New(httpapi.Deps{
-			Pool: pool, Identity: identity.New(pool), Log: log, Loc: cfg.Location(), CookieSecure: cfg.CookieSecure, Web: dist})}
+			Pool: pool, Identity: identity.New(pool), Log: log, Loc: cfg.Location(), CookieSecure: cfg.CookieSecure, Web: dist, StorageDir: cfg.StorageDir})}
 		go func() {
 			<-ctx.Done()
 			sctx, c := context.WithTimeout(context.Background(), 10*time.Second)

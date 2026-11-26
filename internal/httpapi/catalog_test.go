@@ -168,3 +168,27 @@ func TestCatalogIsolasiCompany(t *testing.T) {
 		t.Fatalf("baris lintas company: %d %v", r.Code, r.Body)
 	}
 }
+
+func TestListSort(t *testing.T) {
+	e := setup(t)
+	owner := e.bearer("owner")
+	for _, c := range []string{"BBB", "aaa", "CCC"} {
+		e.unit(owner, c)
+	}
+	codes := func(q string) string {
+		s := ""
+		for _, it := range e.want(e.do("GET", "/api/units?"+q, owner, false, nil), 200).Body["data"].([]any) {
+			s += it.(map[string]any)["code"].(string) + ","
+		}
+		return s
+	}
+	for q, want := range map[string]string{
+		"sort=code&dir=asc":  "aaa,BBB,CCC,", // tanpa membedakan huruf besar/kecil
+		"sort=code&dir=desc": "CCC,BBB,aaa,",
+		"sort=bogus;drop":    codes(""), // field tak dikenal diabaikan
+	} {
+		if got := codes(q); got != want {
+			t.Fatalf("%s: %s, harusnya %s", q, got, want)
+		}
+	}
+}

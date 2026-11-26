@@ -269,7 +269,8 @@ FROM uom_group_lines l JOIN units u ON u.id=l.unit_id WHERE l.uom_group_id = ANY
 }
 
 // Mount mendaftarkan rute katalog dasar.
-func Mount(b *crud.Binder, r chi.Router) {
+func Mount(b *crud.Binder, r chi.Router, storageDir string) {
+	MountProducts(b, r, storageDir)
 	for _, res := range []*crud.Resource{&Units, &UomGroups, &ProductGroups, &Brands} {
 		b.Mount(r, res)
 	}

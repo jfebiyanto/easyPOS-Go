@@ -19,15 +19,16 @@ import (
 )
 
 type env struct {
-	t    *testing.T
-	pool *pgxpool.Pool
-	seed testutil.Seed
-	url  string
+	t       *testing.T
+	pool    *pgxpool.Pool
+	seed    testutil.Seed
+	url     string
+	storage string // akar file unggahan
 }
 
-func newServer(t *testing.T, pool *pgxpool.Pool, limit int) *httptest.Server {
+func newServer(t *testing.T, pool *pgxpool.Pool, limit int, storage string) *httptest.Server {
 	loc, _ := time.LoadLocation("Asia/Jakarta")
-	srv := httptest.NewServer(httpapi.New(httpapi.Deps{Pool: pool, Identity: identity.New(pool), Loc: loc, LoginLimit: limit}))
+	srv := httptest.NewServer(httpapi.New(httpapi.Deps{Pool: pool, Identity: identity.New(pool), Loc: loc, LoginLimit: limit, StorageDir: storage}))
 	t.Cleanup(srv.Close)
 	return srv
 }
@@ -86,8 +87,9 @@ func (e *env) bearer(user string) string {
 
 func setup(t *testing.T) *env {
 	pool, _, seed := testutil.NewDB(t)
-	srv := newServer(t, pool, 1000)
-	return &env{t: t, pool: pool, seed: seed, url: srv.URL}
+	dir := t.TempDir()
+	srv := newServer(t, pool, 1000, dir)
+	return &env{t: t, pool: pool, seed: seed, url: srv.URL, storage: dir}
 }
 
 func TestLogin(t *testing.T) {
@@ -169,7 +171,7 @@ func TestLogin(t *testing.T) {
 
 func TestRateLimitLogin(t *testing.T) {
 	pool, _, _ := testutil.NewDB(t)
-	e := &env{t: t, pool: pool, url: newServer(t, pool, 5).URL}
+	e := &env{t: t, pool: pool, url: newServer(t, pool, 5, t.TempDir()).URL}
 	for i := 1; i <= 6; i++ {
 		r := e.do("POST", "/api/auth/login", "", false, map[string]string{"username": "owner", "password": "salah", "client": "api"})
 		want := 422

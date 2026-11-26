@@ -14,6 +14,7 @@ type Config struct {
 	AppTimezone  string `env:"EASYPOS_APP_TIMEZONE" envDefault:"Asia/Jakarta"`
 	Env          string `env:"EASYPOS_ENV" envDefault:"dev"`
 	CookieSecure bool   `env:"EASYPOS_COOKIE_SECURE"`
+	StorageDir   string `env:"EASYPOS_STORAGE_DIR" envDefault:"./storage"` // gambar produk, dll.
 }
 
 func Load() (Config, error) {

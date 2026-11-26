@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api'
-import { buildPayload, cleanMoney, conversionText, fieldErrors, formatDecimal, initialValues, type FieldDef } from './crudLogic'
+import { buildPayload, cleanMoney, conversionText, fieldErrors, formatDecimal, initialValues, nextSort, type FieldDef } from './crudLogic'
 
 const fields: FieldDef[] = [
   { name: 'code', label: 'Kode', type: 'text', required: true },
@@ -75,5 +75,13 @@ describe('conversionText', () => {
     expect(conversionText('2', 'Pak', '5', 'Pcs')).toBe('2 Pak = 5 Pcs')
     expect(conversionText('100.000', 'Dus', '2.500', 'Pcs')).toBe('100 Dus = 2.5 Pcs')
     expect(conversionText('', '', '', '')).toBe('0 ? = 0 ?')
+  })
+})
+
+describe('nextSort', () => {
+  it('kolom baru asc, kolom sama bergantian', () => {
+    expect(nextSort({ key: 'code', dir: 'asc' }, 'name')).toEqual({ key: 'name', dir: 'asc' })
+    expect(nextSort({ key: 'code', dir: 'asc' }, 'code')).toEqual({ key: 'code', dir: 'desc' })
+    expect(nextSort({ key: 'code', dir: 'desc' }, 'code')).toEqual({ key: 'code', dir: 'asc' })
   })
 })

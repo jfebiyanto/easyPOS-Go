@@ -1,7 +1,7 @@
 import { useId, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
-import { cleanMoney, type FieldDef, type Opt, type Row, type Values } from './crudLogic'
+import { cleanMoney, tabNames, type FieldDef, type Opt, type Row, type Values } from './crudLogic'
 
 export const inputCls =
   'w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm text-text disabled:opacity-60 aria-[invalid=true]:border-danger'
@@ -50,8 +50,8 @@ export function MoneyInput({ value, onChange, ...rest }: {
 }
 
 // shortcut: hanya 100 opsi pertama (batas per_page API); ganti ke pencarian async bila data melebihi itu.
-export function useOptions(ref: NonNullable<FieldDef['ref']>): Opt[] {
-  const { data } = useQuery({ queryKey: ['options', ref.path], queryFn: () => api<{ data: Row[] }>(`${ref.path}?per_page=100`), staleTime: 30_000 })
+export function useOptions(ref: NonNullable<FieldDef['ref']>, enabled = true): Opt[] {
+  const { data } = useQuery({ queryKey: ['options', ref.path], queryFn: () => api<{ data: Row[] }>(`${ref.path}?per_page=100`), staleTime: 30_000, enabled })
   return (data?.data ?? []).map((r) => ({
     value: String(r[ref.value ?? 'id']),
     label: ref.label(r) + (r.is_active === false ? ' (nonaktif)' : ''),
@@ -75,24 +75,31 @@ export function Select({ options, value, onChange, ...rest }: {
 }
 
 /** Formulir dari definisi field. Field createOnly disembunyikan saat edit; showWhen menyembunyikan secara kondisional. */
-export function RecordForm({ fields, values, errors, onChange, isCreate, disabled }: {
+export function RecordForm({ fields, values, errors, onChange, isCreate, disabled, tab, record = null, refresh = () => {} }: {
   fields: FieldDef[]; values: Values; errors: Record<string, string>; onChange: (name: string, v: unknown) => void; isCreate: boolean; disabled?: boolean
+  /** Tab aktif; hanya field tab itu yang dirender (field tanpa tab ikut tab pertama). */
+  tab?: string
+  record?: Row | null
+  refresh?: () => void
 }) {
+  const first = tabNames(fields)[0]
   return (
     <>
       {fields.map((f) => {
         if ((f.createOnly && !isCreate) || (f.showWhen && !f.showWhen(values))) return null
+        if (tab && (f.tab ?? first) !== tab) return null
+        const off = disabled || !!f.disabledWhen?.(values)
         const v = values[f.name]
         const set = (x: unknown) => onChange(f.name, x)
         const err = errors[f.name]
-        if (f.type === 'custom') return <div key={f.name}>{f.render?.({ values, set, errors, disabled })}</div>
+        if (f.type === 'custom') return <div key={f.name}>{f.render?.({ values, set, errors, disabled: off, setField: onChange, record, refresh })}</div>
         return (
           <FormField key={f.name} label={f.label} required={f.required} hint={f.hint} error={err}>
             {({ id, describedBy, invalid }) => {
-              const a = { id, disabled, 'aria-invalid': invalid, 'aria-describedby': describedBy }
+              const a = { id, disabled: off, 'aria-invalid': invalid, 'aria-describedby': describedBy }
               switch (f.type) {
                 case 'switch':
-                  return <Switch id={id} checked={!!v} onChange={set} disabled={disabled} label={f.label} />
+                  return <Switch id={id} checked={!!v} onChange={set} disabled={off} label={f.label} />
                 case 'money':
                   return <MoneyInput {...a} value={String(v ?? '')} onChange={set} />
                 case 'textarea':

@@ -36,7 +36,7 @@ aplikasi Laravel di `D:\Devs\easyPOS` (acuan baca-saja; jangan diubah dari repo 
 
 ## Arsitektur (butuh baca beberapa file)
 - **Mesin CRUD generik** (`internal/crud`): resource master data dideklarasikan sebagai `crud.Resource` (tabel, `Fields`, `Search`, `Filters`, `Expand`, hook `Validate/BeforeWrite/AfterSave/CanDelete/Locked/Decorate`). `Engine` menangani list/detail/create/update/delete, validasi 422, cek dipakai 409, audit `activity_logs`, dan filter `company_id` â€” jangan menulis handler CRUD manual untuk entitas baru. `Binder.Mount` memasang rute dengan route key. `internal/org` adalah contoh resource (company singleton, pajak, mata uang, gudang, gerai, pengguna).
-- **Status Fase 1**: spesifikasi di `docs/tasks/fase-1.md` (bentuk API, aturan hapus, audit, tes wajib per entitas). `org.Mount` belum dipasang di `internal/httpapi/router.go` dan belum dites.
+- **Status Fase 1**: spesifikasi di `docs/tasks/fase-1.md`. Selesai: F1.1–F1.5 (org, satuan/UoM, produk). Berikutnya F1.6 price list + `internal/pricing`. File unggahan (gambar produk) di `EASYPOS_STORAGE_DIR` (default `./storage`, di-gitignore), disajikan di `/media/*` lewat `internal/platform/storage`. Daftar mendukung `?sort=<field>&dir=asc|desc` (field kolom nyata saja).
 - **Auth/akses**: `identity` memegang token (kompatibel Sanctum `{id}|{token}`), `Allows` (matriks route key per peran) dan `writablePrefixes`. Cookie terpisah `easypos_bo_token` (backoffice) dan `easypos_pos_token` (`/api/pos/*`); Bearer didahulukan.
 - **Frontend** di-embed ke binary lewat `web/dist` (`internal/httpapi/web.go`), jadi build web dulu sebelum `go build`.
 - `internal/testutil.NewDB` membuat DB sementara + seed (company, 2 gerai, owner/manager/cashier/inactive; password `rahasia123`) per tes.

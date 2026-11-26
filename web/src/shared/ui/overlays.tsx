@@ -53,14 +53,14 @@ export function ConfirmDialog({ open, title, message, confirmLabel = 'Hapus', bu
 }
 
 /* ---------- Drawer (panel kanan) ---------- */
-export function Drawer({ open, title, description, onClose, children }: {
-  open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode
+export function Drawer({ open, title, description, onClose, children, wide }: {
+  open: boolean; title: string; description?: string; onClose: () => void; children: ReactNode; wide?: boolean
 }) {
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50" />
-        <Dialog.Content className="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col border-l border-border bg-surface shadow-xl">
+        <Dialog.Content className={`fixed inset-y-0 right-0 z-50 flex w-full ${wide ? 'max-w-2xl' : 'max-w-lg'} flex-col border-l border-border bg-surface shadow-xl`}>
           <div className="flex items-start justify-between gap-3 border-b border-border px-5 py-4">
             <div>
               <Dialog.Title className="text-lg font-semibold">{title}</Dialog.Title>
