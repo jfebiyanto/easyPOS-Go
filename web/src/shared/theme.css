@@ -18,7 +18,6 @@
   --warn-soft: #FEF3D6;
   --danger: #B42318;
   --danger-soft: #FEF3F2;
-  --logo-bg: #F9F6F0;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
@@ -37,7 +36,6 @@
   --warn-soft: #3A2E10;
   --danger: #F97066;
   --danger-soft: #3A1715;
-  --logo-bg: #F9F6F0;
 }
 
 @theme inline {
@@ -57,9 +55,12 @@
   --color-warn-soft: var(--warn-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
-  --color-logo: var(--logo-bg);
 }
 
 html, body, #root { height: 100%; }
 body { background: var(--bg); color: var(--text); font-family: var(--font-sans); }
 :focus-visible { outline: 2px solid var(--primary-text); outline-offset: 2px; }
+
+.logo-dark { display: none; }
+:root[data-theme="dark"] .logo-light { display: none; }
+:root[data-theme="dark"] .logo-dark { display: inline; }

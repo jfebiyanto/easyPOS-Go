@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react'
-import { Lock } from 'lucide-react'
+import { LogoMark } from './Logo'
 import { api, setLockedHandler, type Me } from './api'
 import { isIdle, needsHeartbeat } from './idle'
 
@@ -61,7 +61,8 @@ function LockScreen({ me, onUnlocked, onLogout }: { me: Me; onUnlocked: () => vo
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="lock-title" className="fixed inset-0 z-50 flex items-center justify-center bg-bg p-4">
       <form onSubmit={submit} className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 shadow-sm">
-        <h1 id="lock-title" className="flex items-center gap-2 text-xl font-semibold text-text"><Lock size={20} aria-hidden="true" /> Sesi terkunci</h1>
+        <LogoMark className="mb-3 h-14" />
+        <h1 id="lock-title" className="text-xl font-semibold text-text">Sesi terkunci</h1>
         <p className="mb-5 mt-1 text-sm text-muted">Terkunci karena tidak ada aktivitas. Masukkan password {me.name} untuk melanjutkan.</p>
         <label htmlFor="unlock-password" className="mb-1 block text-sm font-medium">Password</label>
         <input id="unlock-password" type="password" autoComplete="current-password" autoFocus required value={password}
