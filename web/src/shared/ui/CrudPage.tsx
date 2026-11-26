@@ -24,6 +24,7 @@ export type CrudConfig = {
   /** Filter tambahan di toolbar (dikirim sebagai query ?name=value). */
   filters?: Filter[]
   /** Drawer lebar (formulir bertab). */
+  /** Drawer lebar + formulir 2 kolom. Default: otomatis bila field lebih dari 4. */
   wide?: boolean
 }
 
@@ -208,8 +209,9 @@ function EditDrawer({ cfg, target, canWrite, onClose, onSaved, refresh }: {
     },
   })
 
+  const wide = cfg.wide ?? cfg.fields.filter((f) => f.type !== 'custom' && f.type !== 'textarea').length > 4 // banyak field: 2 kolom
   return (
-    <Drawer open wide={cfg.wide} title={isCreate ? `Tambah ${cfg.noun}` : `${canWrite ? 'Ubah' : 'Detail'} ${cfg.noun}`} onClose={onClose}>
+    <Drawer open wide={wide} title={isCreate ? `Tambah ${cfg.noun}` : `${canWrite ? 'Ubah' : 'Detail'} ${cfg.noun}`} onClose={onClose}>
       {!loaded ? <p className="text-muted">Memuat…</p> : (
         <>
         <form onSubmit={(e) => { e.preventDefault(); setErrors({}); save.mutate() }}>
@@ -218,12 +220,12 @@ function EditDrawer({ cfg, target, canWrite, onClose, onSaved, refresh }: {
               {tabs.map((t) => (
                 <button key={t} type="button" role="tab" id={`tab-${t}`} aria-selected={tab === t} onClick={() => setTab(t)}
                   className={`-mb-px border-b-2 px-3 py-2 text-sm font-medium ${tab === t ? 'border-primary text-text' : 'border-transparent text-muted hover:text-text'}`}>
-                  {t}{errTabs.has(t) && <span className="ml-1 text-danger" role="img" aria-label="ada kesalahan">�</span>}
+                  {t}{errTabs.has(t) && <span className="ml-1 text-danger" role="img" aria-label="ada kesalahan">•</span>}
                 </button>
               ))}
             </div>
           )}
-          <RecordForm fields={cfg.fields} values={values} errors={errors} isCreate={isCreate} disabled={!canWrite} tab={tab}
+          <RecordForm columns={wide ? 2 : 1} fields={cfg.fields} values={values} errors={errors} isCreate={isCreate} disabled={!canWrite} tab={tab}
             record={rec} refresh={() => { refresh(); detail.refetch() }}
             onChange={(n, v) => { setValues((p) => ({ ...p, [n]: v })); setErrors((p) => (p[n] ? { ...p, [n]: '' } : p)) }} />
           {save.error && !(save.error instanceof ApiError && save.error.status === 422) && <p role="alert" className="mb-3 rounded-xl bg-danger-soft px-3 py-2 text-sm text-danger">{save.error.message}</p>}

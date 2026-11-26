@@ -7,7 +7,9 @@ export const inputCls =
   'w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm text-text disabled:opacity-60 aria-[invalid=true]:border-danger'
 
 /** Label + kontrol + hint + pesan error, dengan id yang dihubungkan untuk aksesibilitas. */
-export function FormField({ label, required, hint, error, children }: {
+export function FormField({ label, required, hint, error, full, children }: {
+  /** Selebar semua kolom (formulir 2 kolom). */
+  full?: boolean
   label: string
   required?: boolean
   hint?: string
@@ -18,7 +20,7 @@ export function FormField({ label, required, hint, error, children }: {
   const msgId = `${id}-msg`
   const describedBy = error || hint ? msgId : undefined
   return (
-    <div className="mb-4">
+    <div className={`mb-4 ${full ? 'sm:col-span-2' : ''}`}>
       <label htmlFor={id} className="mb-1 block text-sm font-medium">
         {label} {required && <span aria-hidden="true" className="text-danger">*</span>}
       </label>
@@ -75,7 +77,8 @@ export function Select({ options, value, onChange, ...rest }: {
 }
 
 /** Formulir dari definisi field. Field createOnly disembunyikan saat edit; showWhen menyembunyikan secara kondisional. */
-export function RecordForm({ fields, values, errors, onChange, isCreate, disabled, tab, record = null, refresh = () => {} }: {
+export function RecordForm({ fields, values, errors, onChange, isCreate, disabled, tab, record = null, refresh = () => {}, columns = 1 }: {
+  columns?: 1 | 2
   fields: FieldDef[]; values: Values; errors: Record<string, string>; onChange: (name: string, v: unknown) => void; isCreate: boolean; disabled?: boolean
   /** Tab aktif; hanya field tab itu yang dirender (field tanpa tab ikut tab pertama). */
   tab?: string
@@ -84,7 +87,7 @@ export function RecordForm({ fields, values, errors, onChange, isCreate, disable
 }) {
   const first = tabNames(fields)[0]
   return (
-    <>
+    <div className={columns === 2 ? 'grid gap-x-4 sm:grid-cols-2' : ''}>
       {fields.map((f) => {
         if ((f.createOnly && !isCreate) || (f.showWhen && !f.showWhen(values))) return null
         if (tab && (f.tab ?? first) !== tab) return null
@@ -92,9 +95,9 @@ export function RecordForm({ fields, values, errors, onChange, isCreate, disable
         const v = values[f.name]
         const set = (x: unknown) => onChange(f.name, x)
         const err = errors[f.name]
-        if (f.type === 'custom') return <div key={f.name}>{f.render?.({ values, set, errors, disabled: off, setField: onChange, record, refresh })}</div>
+        if (f.type === 'custom') return <div key={f.name} className="sm:col-span-2">{f.render?.({ values, set, errors, disabled: off, setField: onChange, record, refresh })}</div>
         return (
-          <FormField key={f.name} label={f.label} required={f.required} hint={f.hint} error={err}>
+          <FormField key={f.name} full={f.type === 'textarea'} label={f.label} required={f.required} hint={f.hint} error={err}>
             {({ id, describedBy, invalid }) => {
               const a = { id, disabled: off, 'aria-invalid': invalid, 'aria-describedby': describedBy }
               switch (f.type) {
@@ -119,6 +122,6 @@ export function RecordForm({ fields, values, errors, onChange, isCreate, disable
           </FormField>
         )
       })}
-    </>
+    </div>
   )
 }
