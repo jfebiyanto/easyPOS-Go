@@ -1,5 +1,5 @@
 ﻿import { useState, type ReactNode } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useLocation } from 'react-router-dom'
 import * as Dialog from '@radix-ui/react-dialog'
 import * as Dropdown from '@radix-ui/react-dropdown-menu'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
@@ -8,24 +8,48 @@ import { api, roleLabel, type Me, type StoreRef } from '../shared/api'
 import { Logo } from '../shared/Logo'
 import { ThemeToggle } from '../shared/ThemeToggle'
 import { menu } from './menu'
+import { NAV_KEY, parseCollapsed, toggle } from './navState'
 
 function Nav({ me, onNavigate }: { me: Me; onNavigate?: () => void }) {
+  const { pathname } = useLocation()
+  const [collapsed, setCollapsed] = useState(() => {
+    try { return parseCollapsed(localStorage.getItem(NAV_KEY)) } catch { return [] }
+  })
+  function flip(label: string) {
+    const next = toggle(collapsed, label)
+    setCollapsed(next)
+    try { localStorage.setItem(NAV_KEY, JSON.stringify(next)) } catch { /* penyimpanan diblokir: state tetap di memori */ }
+  }
   return (
-    <nav aria-label="Menu utama" className="flex flex-col gap-5 p-4">
+    <nav aria-label="Menu utama" className="flex flex-col gap-3 p-4">
       {menu.map((g) => {
         const items = g.items.filter((i) => me.permissions[i.key]?.visible)
         if (!items.length) return null
+        // grup yang memuat halaman aktif tidak boleh tersembunyi
+        const hasActive = items.some((i) => (i.path === '/' ? pathname === '/' : pathname.startsWith(i.path)))
+        const open = hasActive || !collapsed.includes(g.label)
+        const single = g.items.length === 1
         return (
           <div key={g.label}>
-            <p className="mb-1 px-3 text-xs font-semibold uppercase tracking-wide text-muted">{g.label}</p>
-            {items.map(({ path, label, icon: Icon }) => (
-              <NavLink key={path} to={path} end={path === '/'} onClick={onNavigate}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium ${isActive ? 'bg-primary-soft text-primary-text' : 'text-text hover:bg-surface-2'}`}>
-                <Icon size={18} aria-hidden="true" />
-                {label}
-              </NavLink>
-            ))}
+            {!single && (
+              <button type="button" onClick={() => flip(g.label)} aria-expanded={open} aria-controls={`nav-${g.label}`}
+                className="mb-1 flex w-full items-center justify-between rounded-lg px-3 py-1 text-xs font-semibold uppercase tracking-wide text-muted hover:bg-surface-2">
+                {g.label}
+                <ChevronDown size={14} aria-hidden="true" className={`transition-transform ${open ? '' : '-rotate-90'}`} />
+              </button>
+            )}
+            {open && (
+              <div id={`nav-${g.label}`}>
+                {items.map(({ path, label, icon: Icon }) => (
+                  <NavLink key={path} to={path} end={path === '/'} onClick={onNavigate}
+                    className={({ isActive }) =>
+                      `flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium ${isActive ? 'bg-primary-soft text-primary-text' : 'text-text hover:bg-surface-2'}`}>
+                    <Icon size={18} aria-hidden="true" />
+                    {label}
+                  </NavLink>
+                ))}
+              </div>
+            )}
           </div>
         )
       })}
