@@ -80,6 +80,7 @@ var MenuRoutes = []string{
 	"admin.products.index", "admin.price-lists.index", "admin.customers.index", "admin.promotions.index",
 	"admin.stock-review.index", "admin.stock-adjustments.index", "admin.stock-transfer-shipments.index",
 	"admin.eod.index", "admin.numberings.index", "admin.settings-view.index", "admin.company.edit",
+	"admin.stores.index", "admin.warehouses.index", "admin.users.index", "admin.tax-groups.index", "admin.currencies.index",
 }
 
 func Permissions(role string) map[string]Permission {

@@ -1,5 +1,5 @@
 export class ApiError extends Error {
-  constructor(public status: number, message: string) {
+  constructor(public status: number, message: string, public errors: Record<string, string[]> = {}) {
     super(message)
   }
 }
@@ -26,7 +26,10 @@ export async function api<T = unknown>(path: string, opts: { method?: string; bo
   const data = await res.json().catch(() => ({}))
   if (res.status === 401 && path !== '/api/auth/login') onUnauthorized()
   if (res.status === 423) onLocked()
-  if (!res.ok) throw new ApiError(res.status, (data as { message?: string }).message ?? 'Terjadi kesalahan.')
+  if (!res.ok) {
+    const d = data as { message?: string; errors?: Record<string, string[]> }
+    throw new ApiError(res.status, d.message ?? 'Terjadi kesalahan.', d.errors)
+  }
   return data as T
 }
 

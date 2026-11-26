@@ -1,4 +1,4 @@
-import { Boxes, Building2, CalendarCheck, FileText, Hash, LayoutDashboard, Percent, Receipt, RotateCcw, Settings, ShoppingBag, Tags, Truck, Users, type LucideIcon } from 'lucide-react'
+import { Boxes, Building2, Coins, Store, UserCog, Warehouse, CalendarCheck, FileText, Hash, LayoutDashboard, Percent, Receipt, RotateCcw, Settings, ShoppingBag, Tags, Truck, Users, type LucideIcon } from 'lucide-react'
 
 export type MenuItem = { key: string; label: string; path: string; icon: LucideIcon }
 export type MenuGroup = { label: string; items: MenuItem[] }
@@ -31,12 +31,27 @@ export const menu: MenuGroup[] = [
     ],
   },
   {
-    label: 'Lainnya',
+    label: 'Perusahaan',
+    items: [
+      { key: 'admin.company.edit', label: 'Profil', path: '/company', icon: Building2 },
+      { key: 'admin.stores.index', label: 'Gerai', path: '/stores', icon: Store },
+      { key: 'admin.warehouses.index', label: 'Gudang', path: '/warehouses', icon: Warehouse },
+      { key: 'admin.users.index', label: 'Pengguna', path: '/users', icon: UserCog },
+    ],
+  },
+  {
+    label: 'Keuangan',
+    items: [
+      { key: 'admin.tax-groups.index', label: 'Grup Pajak', path: '/tax-groups', icon: Percent },
+      { key: 'admin.currencies.index', label: 'Mata Uang', path: '/currencies', icon: Coins },
+    ],
+  },
+  {
+    label: 'Sistem',
     items: [
       { key: 'admin.eod.index', label: 'End of Day', path: '/eod', icon: CalendarCheck },
       { key: 'admin.numberings.index', label: 'Penomoran', path: '/numberings', icon: Hash },
       { key: 'admin.settings-view.index', label: 'Konfigurasi Sistem', path: '/settings', icon: Settings },
-      { key: 'admin.company.edit', label: 'Perusahaan', path: '/company', icon: Building2 },
     ],
   },
 ]
