@@ -5,6 +5,7 @@ import * as Dropdown from '@radix-ui/react-dropdown-menu'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ChevronDown, LogOut, Menu, Store, X } from 'lucide-react'
 import { api, roleLabel, type Me, type StoreRef } from '../shared/api'
+import { Logo } from '../shared/Logo'
 import { ThemeToggle } from '../shared/ThemeToggle'
 import { menu } from './menu'
 
@@ -105,7 +106,7 @@ export function Layout({ me, children }: { me: Me; children: ReactNode }) {
   return (
     <div className="flex h-full bg-bg">
       <aside className="hidden w-64 shrink-0 overflow-y-auto border-r border-border bg-surface md:block">
-        <p className="px-7 pt-6 text-lg font-bold">easyPOS</p>
+        <div className="px-5 pt-5"><Logo className="h-12" /></div>
         <Nav me={me} />
       </aside>
       <div className="flex min-w-0 flex-1 flex-col">
@@ -117,7 +118,8 @@ export function Layout({ me, children }: { me: Me; children: ReactNode }) {
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 z-40 bg-black/50" />
               <Dialog.Content className="fixed inset-y-0 left-0 z-50 w-72 overflow-y-auto bg-surface">
-                <Dialog.Title className="px-7 pt-6 text-lg font-bold">easyPOS</Dialog.Title>
+                <div className="px-5 pt-5"><Logo className="h-12" /></div>
+                <Dialog.Title className="sr-only">easyPOS</Dialog.Title>
                 <Dialog.Description className="sr-only">Navigasi menu backoffice</Dialog.Description>
                 <Dialog.Close className="absolute right-3 top-3 rounded-lg p-2" aria-label="Tutup menu"><X size={18} aria-hidden="true" /></Dialog.Close>
                 <Nav me={me} onNavigate={() => setOpen(false)} />

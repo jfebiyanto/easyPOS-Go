@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { LogOut, ShoppingCart, Wifi, WifiOff } from 'lucide-react'
+import { LogOut, Wifi, WifiOff } from 'lucide-react'
 import { api, type Me } from '../shared/api'
 import { IdleLock } from '../shared/IdleLock'
+import { Logo } from '../shared/Logo'
 import { Login } from '../shared/Login'
 import { ThemeToggle } from '../shared/ThemeToggle'
 
@@ -42,7 +43,7 @@ export function App() {
     <IdleLock me={me} onLogout={logout}>
     <div className="flex h-full flex-col bg-bg">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-2 border-b border-border bg-surface px-4 py-3">
-        <span className="flex items-center gap-2 font-bold"><ShoppingCart size={18} aria-hidden="true" /> easyPOS</span>
+        <Logo className="h-9" />
         <span className="text-sm text-muted">{me.active_store?.name ?? 'Tanpa gerai'} · {me.name}</span>
         <span className="ml-auto flex items-center gap-4 text-sm">
           <span className={`flex items-center gap-1.5 ${online ? 'text-text' : 'text-warn'}`}>

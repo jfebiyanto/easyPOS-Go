@@ -23,7 +23,7 @@ aplikasi Laravel di `D:\Devs\easyPOS` (acuan baca-saja; jangan diubah dari repo 
 6. **Waktu**: kolom `timestamp(0) without time zone` disimpan UTC (`time.Now().UTC()`); zona tampilan/penomoran = `EASYPOS_APP_TIMEZONE`.
 7. **Akses**: setiap rute backoffice punya route key gaya Laravel (mis. `admin.settings.update`) dan dibatasi `identity.Allows`. Rute baru otomatis read-only bagi store_manager sampai didaftarkan di `writablePrefixes`.
 8. **Tes**: setiap aturan bisnis wajib punya tes. Tes integrasi memakai Postgres sungguhan (`EASYPOS_TEST_DATABASE_URL`, DB sementara dibuat otomatis oleh `internal/testutil`).
-9. **UI**: bahasa Indonesia. **Tidak ada warna hijau.** Dark dan light wajib untuk setiap komponen baru — pakai token di `web/src/shared/theme.css`, jangan hardcode warna. Semua request lewat `web/src/shared/api.ts`. Kontras teks >= 4.5:1.
+9. **UI**: bahasa Indonesia. **Tidak ada warna hijau.** Dark dan light wajib untuk setiap komponen baru — pakai token di `web/src/shared/theme.css`, jangan hardcode warna. Semua request lewat `web/src/shared/api.ts`. Kontras teks >= 4.5:1. Palet mengikuti logo (`web/src/assets/easypos_logo.png`): primary oranye (`#C2410C` terang / `#F06A2A` gelap), latar krem; logo dipasang lewat `shared/Logo.tsx` (chip krem `--logo-bg` agar terbaca di tema gelap).
 10. Jangan commit secret; `.env` di-gitignore, contoh di `.env.example`.
 11. **Commit per fase/task**: setiap fase atau task dari `docs/tasks/` selesai (vet + test hijau, termasuk tes DB) langsung di-commit lokal dengan pesan `fase-N: <ringkasan>`; satu commit per fase/task, tidak digabung. Jangan push kecuali diminta.
 

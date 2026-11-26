@@ -3,39 +3,41 @@
 /* Token tema (terang / gelap). Tidak ada warna hijau. */
 :root {
   color-scheme: light;
-  --bg: #F5F6F8;
+  --bg: #F9F6F0;
   --surface: #FFFFFF;
-  --surface-2: #F9FAFB;
-  --border: #E6E8EC;
-  --text: #101828;
-  --text-muted: #5B6474;
-  --primary: #1E3A5F;
-  --primary-hover: #142940;
+  --surface-2: #FBF9F5;
+  --border: #E8E2D8;
+  --text: #1C1917;
+  --text-muted: #5F574E;
+  --primary: #C2410C;
+  --primary-hover: #9A3412;
   --on-primary: #FFFFFF;
-  --primary-text: #1E3A5F;
-  --primary-soft: #EEF2F7;
-  --warn: #B54708;
-  --warn-soft: #FEF6E7;
+  --primary-text: #B23A0A;
+  --primary-soft: #FDEBDD;
+  --warn: #8A4B00;
+  --warn-soft: #FEF3D6;
   --danger: #B42318;
   --danger-soft: #FEF3F2;
+  --logo-bg: #F9F6F0;
 }
 :root[data-theme="dark"] {
   color-scheme: dark;
-  --bg: #0E141B;
-  --surface: #151C25;
-  --surface-2: #1B2430;
-  --border: #2A3442;
-  --text: #E7ECF2;
-  --text-muted: #9AA6B5;
-  --primary: #3D6A9E;
-  --primary-hover: #4A78AD;
-  --on-primary: #FFFFFF;
-  --primary-text: #9DBCE3;
-  --primary-soft: #1C2B3D;
-  --warn: #F5A35C;
-  --warn-soft: #3A2614;
+  --bg: #161210;
+  --surface: #1F1A17;
+  --surface-2: #28211D;
+  --border: #3A322C;
+  --text: #F3EEE8;
+  --text-muted: #B3A89B;
+  --primary: #F06A2A;
+  --primary-hover: #FF8049;
+  --on-primary: #1C0F07;
+  --primary-text: #FF9A66;
+  --primary-soft: #3A2113;
+  --warn: #F5C25C;
+  --warn-soft: #3A2E10;
   --danger: #F97066;
   --danger-soft: #3A1715;
+  --logo-bg: #F9F6F0;
 }
 
 @theme inline {
@@ -55,6 +57,7 @@
   --color-warn-soft: var(--warn-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-logo: var(--logo-bg);
 }
 
 html, body, #root { height: 100%; }
