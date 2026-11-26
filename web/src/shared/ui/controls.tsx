@@ -1,7 +1,7 @@
-import { useId, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
-import { cleanMoney, formatNpwp, tabNames, type FieldDef, type Opt, type Row, type Values } from './crudLogic'
+import { cleanMoney, formatNpwp, npwpError, tabNames, type FieldDef, type Opt, type Row, type Values } from './crudLogic'
 
 export const inputCls =
   'w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm text-text disabled:opacity-60 aria-[invalid=true]:border-danger'
@@ -86,6 +86,7 @@ export function RecordForm({ fields, values, errors, onChange, isCreate, disable
   refresh?: () => void
 }) {
   const first = tabNames(fields)[0]
+  const [blurErrors, setBlurErrors] = useState<Record<string, string>>({}) // validasi lokal saat lost focus
   return (
     <div className={columns === 2 ? 'grid gap-x-4 sm:grid-cols-2' : ''}>
       {fields.map((f) => {
@@ -93,8 +94,8 @@ export function RecordForm({ fields, values, errors, onChange, isCreate, disable
         if (tab && (f.tab ?? first) !== tab) return null
         const off = disabled || !!f.disabledWhen?.(values)
         const v = values[f.name]
-        const set = (x: unknown) => onChange(f.name, x)
-        const err = errors[f.name]
+        const set = (x: unknown) => { if (blurErrors[f.name]) setBlurErrors((p) => ({ ...p, [f.name]: '' })); onChange(f.name, x) }
+        const err = errors[f.name] || blurErrors[f.name]
         if (f.type === 'custom') return <div key={f.name} className="sm:col-span-2">{f.render?.({ values, set, errors, disabled: off, setField: onChange, record, refresh })}</div>
         return (
           <FormField key={f.name} full={f.type === 'textarea'} label={f.label} required={f.required} hint={f.hint} error={err}>
@@ -113,7 +114,7 @@ export function RecordForm({ fields, values, errors, onChange, isCreate, disable
                     : <Select {...a} options={f.options ?? []} value={String(v ?? '')} onChange={set} />
                 case 'npwp':
                   return <input {...a} type="text" inputMode="numeric" maxLength={19} placeholder="00.0000.000000.0000" autoComplete="off"
-                    value={String(v ?? '')} onChange={(e) => set(e.target.value)} onBlur={() => set(formatNpwp(String(v ?? '')))} className={inputCls} />
+                    value={String(v ?? '')} onChange={(e) => set(e.target.value)} onBlur={() => { const t = String(v ?? ''); onChange(f.name, formatNpwp(t)); setBlurErrors((p) => ({ ...p, [f.name]: npwpError(t) })) }} className={inputCls} />
                 default:
                   return (
                     <input {...a} type={f.type === 'number' ? 'number' : f.type} maxLength={f.maxLength}

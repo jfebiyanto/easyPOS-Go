@@ -66,6 +66,9 @@ export function formatNpwp(s: string): string {
   return [d.slice(0, 2), d.slice(2, 6), d.slice(6, 12), d.slice(12, 16)].filter(Boolean).join('.')
 }
 
+/** Pesan salah bila NPWP terisi tapi bukan 16 digit; kosong dianggap valid (wajib-tidaknya urusan field). */
+export const npwpError = (s: string): string => (npwpDigits(s) && npwpDigits(s).length !== 16 ? 'NPWP harus 16 digit angka.' : '')
+
 /** Payload ke API: string kosong -> null (kecuali wajib), number -> Number, field tersembunyi/createOnly/password kosong dibuang. */
 export function buildPayload(fields: FieldDef[], values: Values, isCreate: boolean): Row {
   const out: Row = {}

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api'
-import { buildPayload, cleanMoney, conversionText, fieldErrors, formatDecimal, formatNpwp, initialValues, nextSort, npwpDigits, type FieldDef } from './crudLogic'
+import { buildPayload, cleanMoney, conversionText, fieldErrors, formatDecimal, formatNpwp, initialValues, nextSort, npwpDigits, npwpError, type FieldDef } from './crudLogic'
 
 const fields: FieldDef[] = [
   { name: 'code', label: 'Kode', type: 'text', required: true },
@@ -93,6 +93,11 @@ describe('NPWP', () => {
     expect(formatNpwp('01234')).toBe('01.234')
     expect(formatNpwp('')).toBe('')
     expect(npwpDigits('01.2345.678901.2345 99')).toBe('0123456789012345')
+  })
+  it('validasi lost focus: terisi harus 16 digit, kosong lolos', () => {
+    expect(npwpError('01.234')).toBe('NPWP harus 16 digit angka.')
+    expect(npwpError('01.2345.678901.2345')).toBe('')
+    expect(npwpError('')).toBe('')
   })
   it('form: tampil terformat dari record, payload 16 digit atau null', () => {
     const f: FieldDef[] = [{ name: 'npwp', label: 'NPWP', type: 'npwp' }]
