@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react'
 import { ApiError } from '../api'
 
 export type Opt = { value: string; label: string }
@@ -5,10 +6,16 @@ export type Values = Record<string, unknown>
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type Row = Record<string, any>
 
+export type CustomCtx = { values: Values; set: (v: unknown) => void; errors: Record<string, string>; disabled?: boolean }
+
 export type FieldDef = {
   name: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'money' | 'switch' | 'select' | 'password' | 'date'
+  type: 'text' | 'textarea' | 'number' | 'money' | 'switch' | 'select' | 'password' | 'date' | 'custom'
+  /** Hanya type 'custom': render sendiri; nilai dibawa apa adanya ke payload. */
+  render?: (c: CustomCtx) => ReactNode
+  /** Nilai awal field custom dari record (edit). */
+  fromRecord?: (rec: Row) => unknown
   required?: boolean
   hint?: string
   default?: unknown
@@ -26,7 +33,8 @@ const emptyDefault = (f: FieldDef): unknown => (f.type === 'switch' ? false : ''
 export function initialValues(fields: FieldDef[], rec?: Row | null): Values {
   const v: Values = {}
   for (const f of fields) {
-    if (rec) v[f.name] = f.type === 'password' ? '' : (rec[f.name] ?? emptyDefault(f))
+    if (rec && f.fromRecord) v[f.name] = f.fromRecord(rec)
+    else if (rec) v[f.name] = f.type === 'password' ? '' : (rec[f.name] ?? emptyDefault(f))
     else v[f.name] = f.default ?? emptyDefault(f)
   }
   return v
@@ -40,7 +48,8 @@ export function buildPayload(fields: FieldDef[], values: Values, isCreate: boole
     if (f.createOnly && !isCreate) continue
     const v = values[f.name]
     if (f.type === 'password' && (v === '' || v == null)) continue
-    if (f.type === 'switch') out[f.name] = !!v
+    if (f.type === 'custom') out[f.name] = v
+    else if (f.type === 'switch') out[f.name] = !!v
     else if (v === '' || v == null) out[f.name] = f.required ? '' : null
     else if (f.type === 'number') out[f.name] = Number(v)
     else out[f.name] = v
@@ -67,4 +76,10 @@ export function formatDecimal(s: string | null | undefined): string {
   const [int, frac] = s.split('.')
   const grouped = int.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
   return frac ? `${grouped},${frac}` : grouped
+}
+
+/** Kalimat konversi UoM: "1 Dus = 12 Pcs" (nol di belakang koma dibuang). */
+export function conversionText(alt: string, unitCode: string, base: string, baseCode: string): string {
+  const trim = (s: string) => (s.includes('.') ? s.replace(/\.?0+$/, '') : s)
+  return `${trim(alt || '0')} ${unitCode || '?'} = ${trim(base || '0')} ${baseCode || '?'}`
 }

@@ -8,6 +8,7 @@ import { allItems } from './menu'
 import { ComingSoon } from './pages/ComingSoon'
 import { Dashboard } from './pages/Dashboard'
 import { NumberingsPage } from './pages/Numberings'
+import { BrandsPage, ProductGroupsPage, UnitsPage, UomGroupsPage } from './pages/catalog'
 import { CompanyPage, CurrenciesPage, StoresPage, TaxGroupsPage, UsersPage, WarehousesPage } from './pages/org'
 import { SettingsPage } from './pages/Settings'
 
@@ -37,6 +38,10 @@ export function App() {
         <Route path="/users" element={<UsersPage me={me} />} />
         <Route path="/tax-groups" element={<TaxGroupsPage me={me} />} />
         <Route path="/currencies" element={<CurrenciesPage me={me} />} />
+        <Route path="/units" element={<UnitsPage me={me} />} />
+        <Route path="/uom-groups" element={<UomGroupsPage me={me} />} />
+        <Route path="/product-groups" element={<ProductGroupsPage me={me} />} />
+        <Route path="/brands" element={<BrandsPage me={me} />} />
         {allItems.map((i) => (
           <Route key={i.path} path={i.path} element={<ComingSoon title={i.label} />} />
         ))}

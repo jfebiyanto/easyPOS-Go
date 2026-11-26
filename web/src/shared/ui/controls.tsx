@@ -85,6 +85,7 @@ export function RecordForm({ fields, values, errors, onChange, isCreate, disable
         const v = values[f.name]
         const set = (x: unknown) => onChange(f.name, x)
         const err = errors[f.name]
+        if (f.type === 'custom') return <div key={f.name}>{f.render?.({ values, set, errors, disabled })}</div>
         return (
           <FormField key={f.name} label={f.label} required={f.required} hint={f.hint} error={err}>
             {({ id, describedBy, invalid }) => {

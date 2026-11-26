@@ -1,4 +1,4 @@
-import { Boxes, Building2, Coins, Store, UserCog, Warehouse, CalendarCheck, FileText, Hash, LayoutDashboard, Percent, Receipt, RotateCcw, Settings, ShoppingBag, Tags, Truck, Users, type LucideIcon } from 'lucide-react'
+import { Boxes, Building2, Coins, Store, UserCog, Warehouse, CalendarCheck, FileText, Hash, LayoutDashboard, Layers, Percent, Receipt, Ruler, Scale, RotateCcw, Settings, ShoppingBag, Tags, Truck, Users, type LucideIcon } from 'lucide-react'
 
 export type MenuItem = { key: string; label: string; path: string; icon: LucideIcon }
 export type MenuGroup = { label: string; items: MenuItem[] }
@@ -20,6 +20,10 @@ export const menu: MenuGroup[] = [
       { key: 'admin.price-lists.index', label: 'Daftar Harga', path: '/price-lists', icon: Tags },
       { key: 'admin.customers.index', label: 'Pelanggan', path: '/customers', icon: Users },
       { key: 'admin.promotions.index', label: 'Promosi', path: '/promotions', icon: Percent },
+      { key: 'admin.groups.index', label: 'Grup Produk', path: '/product-groups', icon: Layers },
+      { key: 'admin.brands.index', label: 'Merek', path: '/brands', icon: Tags },
+      { key: 'admin.units.index', label: 'Satuan', path: '/units', icon: Ruler },
+      { key: 'admin.uom-groups.index', label: 'UoM Group', path: '/uom-groups', icon: Scale },
     ],
   },
   {

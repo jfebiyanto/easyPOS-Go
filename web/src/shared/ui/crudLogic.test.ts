@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api'
-import { buildPayload, cleanMoney, fieldErrors, formatDecimal, initialValues, type FieldDef } from './crudLogic'
+import { buildPayload, cleanMoney, conversionText, fieldErrors, formatDecimal, initialValues, type FieldDef } from './crudLogic'
 
 const fields: FieldDef[] = [
   { name: 'code', label: 'Kode', type: 'text', required: true },
@@ -54,5 +54,26 @@ describe('angka', () => {
     expect(formatDecimal('12500.00')).toBe('12.500,00')
     expect(formatDecimal('1234567')).toBe('1.234.567')
     expect(formatDecimal(null)).toBe('—')
+  })
+})
+
+describe('field custom', () => {
+  const lines: FieldDef = { name: 'lines', label: 'Baris', type: 'custom', default: [], fromRecord: (r) => (r.lines as unknown[]).slice(1) }
+  it('initialValues memakai fromRecord pada edit dan default pada baru', () => {
+    expect(initialValues([lines]).lines).toEqual([])
+    expect(initialValues([lines], { lines: ['dasar', 'dus'] }).lines).toEqual(['dus'])
+  })
+  it('buildPayload membawa nilai custom apa adanya', () => {
+    const v = [{ unit_id: 'a', alt_qty: '1', base_qty: '12' }]
+    expect(buildPayload([lines], { lines: v }, false).lines).toBe(v)
+  })
+})
+
+describe('conversionText', () => {
+  it('membuang nol di belakang koma dan menandai yang belum dipilih', () => {
+    expect(conversionText('1.000', 'Dus', '12.000', 'Pcs')).toBe('1 Dus = 12 Pcs')
+    expect(conversionText('2', 'Pak', '5', 'Pcs')).toBe('2 Pak = 5 Pcs')
+    expect(conversionText('100.000', 'Dus', '2.500', 'Pcs')).toBe('100 Dus = 2.5 Pcs')
+    expect(conversionText('', '', '', '')).toBe('0 ? = 0 ?')
   })
 })

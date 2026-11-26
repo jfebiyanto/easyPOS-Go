@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/httprate"
 	"github.com/jackc/pgx/v5/pgxpool"
 
+	"github.com/jfebiyanto/easyPOS-Go/internal/catalog"
 	"github.com/jfebiyanto/easyPOS-Go/internal/crud"
 	"github.com/jfebiyanto/easyPOS-Go/internal/identity"
 	"github.com/jfebiyanto/easyPOS-Go/internal/org"
@@ -56,6 +57,10 @@ func New(d Deps) http.Handler {
 		d.Log = slog.Default()
 	}
 	s := &server{d}
+	binder := &crud.Binder{E: crud.NewEngine(d.Pool), Route: s.route, Actor: func(r *http.Request) crud.Actor {
+		sess := sessionFrom(r.Context())
+		return crud.Actor{CompanyID: sess.User.CompanyID, UserID: sess.User.ID, StoreID: identity.StoreID(sess), Name: sess.User.Name, Role: sess.User.Role}
+	}}
 	unlockLimit := httprate.Limit(d.LoginLimit, time.Minute, httprate.WithKeyFuncs(httprate.KeyByIP),
 		httprate.WithLimitHandler(func(w http.ResponseWriter, _ *http.Request) { httpx.Error(w, http.StatusTooManyRequests, loginMessage) }))
 	r := chi.NewRouter()
@@ -88,10 +93,8 @@ func New(d Deps) http.Handler {
 
 			r.With(s.route("admin.settings-view.index")).Get("/settings", s.getSettings)
 			r.With(s.route("admin.settings.update")).Put("/settings", s.putSettings)
-			org.Mount(&crud.Binder{E: crud.NewEngine(d.Pool), Route: s.route, Actor: func(r *http.Request) crud.Actor {
-				sess := sessionFrom(r.Context())
-				return crud.Actor{CompanyID: sess.User.CompanyID, UserID: sess.User.ID, StoreID: identity.StoreID(sess), Name: sess.User.Name, Role: sess.User.Role}
-			}}, r)
+			org.Mount(binder, r)
+			catalog.Mount(binder, r)
 			r.With(s.route("admin.numberings.index")).Get("/numberings", s.getNumberings)
 			r.With(s.route("admin.numberings.update")).Put("/numberings", s.putNumberings)
 			r.With(s.route("admin.numberings.next")).Post("/numberings/{type}/next", s.nextNumber)
