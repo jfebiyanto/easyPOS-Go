@@ -23,7 +23,6 @@ export type CrudConfig = {
   canDelete?: (r: Row) => boolean
   /** Filter tambahan di toolbar (dikirim sebagai query ?name=value). */
   filters?: Filter[]
-  /** Drawer lebar (formulir bertab). */
   /** Drawer lebar + formulir 2 kolom. Default: otomatis bila field lebih dari 4. */
   wide?: boolean
 }

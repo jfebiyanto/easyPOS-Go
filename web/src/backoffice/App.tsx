@@ -11,6 +11,7 @@ import { NumberingsPage } from './pages/Numberings'
 import { BrandsPage, ProductGroupsPage, UnitsPage, UomGroupsPage } from './pages/catalog'
 import { CompanyPage, CurrenciesPage, StoresPage, TaxGroupsPage, UsersPage, WarehousesPage } from './pages/org'
 import { ProductsPage } from './pages/products'
+import { PriceListsPage } from './pages/pricelists'
 import { SettingsPage } from './pages/Settings'
 
 export function App() {
@@ -43,6 +44,7 @@ export function App() {
         <Route path="/uom-groups" element={<UomGroupsPage me={me} />} />
         <Route path="/product-groups" element={<ProductGroupsPage me={me} />} />
         <Route path="/products" element={<ProductsPage me={me} />} />
+        <Route path="/price-lists" element={<PriceListsPage me={me} />} />
         <Route path="/brands" element={<BrandsPage me={me} />} />
         {allItems.map((i) => (
           <Route key={i.path} path={i.path} element={<ComingSoon title={i.label} />} />

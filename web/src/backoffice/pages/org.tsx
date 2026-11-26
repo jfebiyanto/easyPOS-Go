@@ -115,7 +115,7 @@ const warehouses: CrudConfig = {
 export const WarehousesPage = ({ me }: { me: Me }) => <CrudPage me={me} cfg={warehouses} />
 
 /* ---------- Gerai ---------- */
-// Price list dan pelanggan default menyusul di F1.6 / F1.8 (resource-nya belum ada).
+// Pelanggan default menyusul di F1.8 (resource-nya belum ada).
 const stores: CrudConfig = {
   title: 'Gerai', noun: 'gerai', path: '/api/stores', permKey: 'admin.stores.index',
   columns: [
@@ -130,6 +130,8 @@ const stores: CrudConfig = {
     { name: 'pic_phone', label: 'Telepon PIC', type: 'text', maxLength: 30 },
     { name: 'warehouse_id', label: 'Gudang', type: 'select', ref: { path: '/api/warehouses', label: (r) => `${r.code} · ${r.name}` }, hint: 'Satu gudang hanya untuk satu gerai.' },
     { name: 'currency', label: 'Mata uang', type: 'select', required: true, ref: { path: '/api/currencies', value: 'code', label: (r) => `${r.code} · ${r.symbol}` } },
+    { name: 'sales_price_list_id', label: 'Price list penjualan', type: 'select', ref: { path: '/api/price-lists', label: (r) => `${r.code} · ${r.name}` }, hint: 'Harga yang dipakai kasir di gerai ini.' },
+    { name: 'purchase_price_list_id', label: 'Price list pembelian', type: 'select', ref: { path: '/api/price-lists', label: (r) => `${r.code} · ${r.name}` } },
     { name: 'ppn_enabled', label: 'PPN aktif', type: 'switch' },
     { name: 'ppn_rate', label: 'Tarif PPN (%)', type: 'money', default: '11.00', showWhen: (v) => v.ppn_enabled === true },
     { name: 'opening_float', label: 'Modal awal kas', type: 'money', default: '0.00' },
