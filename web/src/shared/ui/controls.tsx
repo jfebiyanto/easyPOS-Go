@@ -1,7 +1,7 @@
 import { useId, type ReactNode } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../api'
-import { cleanMoney, tabNames, type FieldDef, type Opt, type Row, type Values } from './crudLogic'
+import { cleanMoney, formatNpwp, tabNames, type FieldDef, type Opt, type Row, type Values } from './crudLogic'
 
 export const inputCls =
   'w-full rounded-xl border border-border bg-surface-2 px-3 py-2 text-sm text-text disabled:opacity-60 aria-[invalid=true]:border-danger'
@@ -111,6 +111,9 @@ export function RecordForm({ fields, values, errors, onChange, isCreate, disable
                   return f.ref
                     ? <RefSelect f={f} {...a} value={String(v ?? '')} onChange={set} />
                     : <Select {...a} options={f.options ?? []} value={String(v ?? '')} onChange={set} />
+                case 'npwp':
+                  return <input {...a} type="text" inputMode="numeric" maxLength={19} placeholder="00.0000.000000.0000" autoComplete="off"
+                    value={String(v ?? '')} onChange={(e) => set(e.target.value)} onBlur={() => set(formatNpwp(String(v ?? '')))} className={inputCls} />
                 default:
                   return (
                     <input {...a} type={f.type === 'number' ? 'number' : f.type} maxLength={f.maxLength}

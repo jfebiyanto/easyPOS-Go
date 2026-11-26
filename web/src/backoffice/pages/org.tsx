@@ -195,7 +195,7 @@ export const UsersPage = ({ me }: { me: Me }) => <CrudPage me={me} cfg={users} /
 const companyFields: FieldDef[] = [
   { name: 'name', label: 'Nama perusahaan', type: 'text', required: true, maxLength: 150 },
   { name: 'address', label: 'Alamat', type: 'textarea', maxLength: 500 },
-  { name: 'npwp_number', label: 'NPWP', type: 'text', maxLength: 30 },
+  { name: 'npwp_number', label: 'NPWP', type: 'npwp', hint: '16 digit; disimpan tanpa titik.' },
   { name: 'phone', label: 'Telepon', type: 'text', maxLength: 30 },
   { name: 'email', label: 'Email', type: 'text', maxLength: 150 },
   { name: 'base_currency_code', label: 'Mata uang dasar', type: 'select', required: true, ref: { path: '/api/currencies', value: 'code', label: (r) => `${r.code} · ${r.symbol}` } },

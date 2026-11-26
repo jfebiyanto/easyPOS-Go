@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ApiError } from '../api'
-import { buildPayload, cleanMoney, conversionText, fieldErrors, formatDecimal, initialValues, nextSort, type FieldDef } from './crudLogic'
+import { buildPayload, cleanMoney, conversionText, fieldErrors, formatDecimal, formatNpwp, initialValues, nextSort, npwpDigits, type FieldDef } from './crudLogic'
 
 const fields: FieldDef[] = [
   { name: 'code', label: 'Kode', type: 'text', required: true },
@@ -83,5 +83,22 @@ describe('nextSort', () => {
     expect(nextSort({ key: 'code', dir: 'asc' }, 'name')).toEqual({ key: 'name', dir: 'asc' })
     expect(nextSort({ key: 'code', dir: 'asc' }, 'code')).toEqual({ key: 'code', dir: 'desc' })
     expect(nextSort({ key: 'code', dir: 'desc' }, 'code')).toEqual({ key: 'code', dir: 'asc' })
+  })
+})
+
+describe('NPWP', () => {
+  it('format xx.xxxx.xxxxxx.xxxx, digit saja yang disimpan', () => {
+    expect(formatNpwp('0123456789012345')).toBe('01.2345.678901.2345')
+    expect(formatNpwp('01.2345.678901.2345')).toBe('01.2345.678901.2345')
+    expect(formatNpwp('01234')).toBe('01.234')
+    expect(formatNpwp('')).toBe('')
+    expect(npwpDigits('01.2345.678901.2345 99')).toBe('0123456789012345')
+  })
+  it('form: tampil terformat dari record, payload 16 digit atau null', () => {
+    const f: FieldDef[] = [{ name: 'npwp', label: 'NPWP', type: 'npwp' }]
+    const v = initialValues(f, { npwp: '0123456789012345' })
+    expect(v.npwp).toBe('01.2345.678901.2345')
+    expect(buildPayload(f, v, false)).toEqual({ npwp: '0123456789012345' })
+    expect(buildPayload(f, { npwp: '' }, false)).toEqual({ npwp: null })
   })
 })

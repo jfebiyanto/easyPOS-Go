@@ -275,11 +275,15 @@ func TestCompanyProfile(t *testing.T) {
 		}
 		return b
 	}
-	d := data(t, e.want(e.do("PUT", "/api/company", owner, false, base(m{"email": "a@b.co", "npwp_number": "01.234"})), 200))
+	d := data(t, e.want(e.do("PUT", "/api/company", owner, false, base(m{"email": "a@b.co", "npwp_number": "01.2345.678901.2345"})), 200))
 	if d["name"] != "PT Uji Jaya" || d["email"] != "a@b.co" {
 		t.Fatalf("%v", d)
 	}
+	if d["npwp_number"] != "0123456789012345" {
+		t.Fatalf("npwp harus tersimpan 16 digit tanpa pemisah: %v", d["npwp_number"])
+	}
 	for field, over := range map[string]m{
+		"npwp_number":        {"npwp_number": "01.234"},
 		"name":               {"name": ""},
 		"email":              {"email": "bukan-email"},
 		"timezone":           {"timezone": "Mars/Olympus"},

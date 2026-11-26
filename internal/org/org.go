@@ -37,6 +37,17 @@ var Company = crud.Resource{
 		crud.B("return_require_receipt", "Retur wajib struk", true),
 	},
 	Validate: func(c *crud.Ctx, m, old crud.Record, in map[string]any, errs validate.Errors) error {
+		if v, ok := m["npwp_number"].(string); ok && v != old["npwp_number"] {
+			d := digitsOnly(v) // disimpan 16 digit tanpa pemisah; format tampil ditangani UI
+			if d != "" && len(d) != 16 {
+				errs.Add("npwp_number", "NPWP harus 16 digit angka.")
+			}
+			if d == "" {
+				m["npwp_number"] = nil
+			} else {
+				m["npwp_number"] = d
+			}
+		}
 		if m["ppn_enabled"] == true && m["tax_group_id"] == nil {
 			errs.Add("tax_group_id", "Wajib diisi bila PPN aktif.")
 		}
@@ -56,6 +67,16 @@ var Company = crud.Resource{
 		}
 		return nil
 	},
+}
+
+func digitsOnly(s string) string {
+	b := make([]rune, 0, len(s))
+	for _, r := range s {
+		if r >= '0' && r <= '9' {
+			b = append(b, r)
+		}
+	}
+	return string(b)
 }
 
 var TaxGroups = crud.Resource{

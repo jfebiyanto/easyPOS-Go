@@ -22,7 +22,7 @@ export type CustomCtx = {
 export type FieldDef = {
   name: string
   label: string
-  type: 'text' | 'textarea' | 'number' | 'money' | 'switch' | 'select' | 'password' | 'date' | 'custom'
+  type: 'text' | 'textarea' | 'number' | 'money' | 'switch' | 'select' | 'password' | 'date' | 'npwp' | 'custom'
   /** Hanya type 'custom': render sendiri; nilai dibawa apa adanya ke payload. */
   render?: (c: CustomCtx) => ReactNode
   /** Nilai awal field custom dari record (edit). */
@@ -51,10 +51,19 @@ export function initialValues(fields: FieldDef[], rec?: Row | null): Values {
   const v: Values = {}
   for (const f of fields) {
     if (rec && f.fromRecord) v[f.name] = f.fromRecord(rec)
-    else if (rec) v[f.name] = f.type === 'password' ? '' : (rec[f.name] ?? emptyDefault(f))
+    else if (rec) v[f.name] = f.type === 'password' ? '' : f.type === 'npwp' ? formatNpwp(String(rec[f.name] ?? '')) : (rec[f.name] ?? emptyDefault(f))
     else v[f.name] = f.default ?? emptyDefault(f)
   }
   return v
+}
+
+/** Hanya digit NPWP (maks 16): inilah yang disimpan di database. */
+export const npwpDigits = (s: string): string => s.replace(/\D/g, '').slice(0, 16)
+
+/** Tampilan NPWP sesuai pencatatan pajak: xx.xxxx.xxxxxx.xxxx (parsial bila digit belum 16). */
+export function formatNpwp(s: string): string {
+  const d = npwpDigits(s)
+  return [d.slice(0, 2), d.slice(2, 6), d.slice(6, 12), d.slice(12, 16)].filter(Boolean).join('.')
 }
 
 /** Payload ke API: string kosong -> null (kecuali wajib), number -> Number, field tersembunyi/createOnly/password kosong dibuang. */
@@ -70,6 +79,7 @@ export function buildPayload(fields: FieldDef[], values: Values, isCreate: boole
     else if (f.type === 'switch') out[f.name] = !!v
     else if (v === '' || v == null) out[f.name] = f.required ? '' : null
     else if (f.type === 'number') out[f.name] = Number(v)
+    else if (f.type === 'npwp') out[f.name] = npwpDigits(String(v)) || (f.required ? '' : null)
     else out[f.name] = v
   }
   return out
