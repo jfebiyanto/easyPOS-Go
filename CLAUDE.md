@@ -1,4 +1,8 @@
-# CLAUDE.md — aturan tetap easyPOS-Go
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+# aturan tetap easyPOS-Go
 
 Produk: POS + backoffice dengan Go (backend) dan React/TS (frontend), DB PostgreSQL. Perilaku bisnis mengacu ke
 aplikasi Laravel di `D:\Devs\easyPOS` (acuan baca-saja; jangan diubah dari repo ini).
@@ -21,10 +25,21 @@ aplikasi Laravel di `D:\Devs\easyPOS` (acuan baca-saja; jangan diubah dari repo 
 8. **Tes**: setiap aturan bisnis wajib punya tes. Tes integrasi memakai Postgres sungguhan (`EASYPOS_TEST_DATABASE_URL`, DB sementara dibuat otomatis oleh `internal/testutil`).
 9. **UI**: bahasa Indonesia. **Tidak ada warna hijau.** Dark dan light wajib untuk setiap komponen baru — pakai token di `web/src/shared/theme.css`, jangan hardcode warna. Semua request lewat `web/src/shared/api.ts`. Kontras teks >= 4.5:1.
 10. Jangan commit secret; `.env` di-gitignore, contoh di `.env.example`.
+11. **Commit per fase/task**: setiap fase atau task dari `docs/tasks/` selesai (vet + test hijau, termasuk tes DB) langsung di-commit lokal dengan pesan `fase-N: <ringkasan>`; satu commit per fase/task, tidak digabung. Jangan push kecuali diminta.
 
 ## Perintah
-- `go vet ./...` · `go test ./...` · `sqlc generate`
-- `npm --prefix web run build` · `npm --prefix web test`
+- `go vet ./...` · `go test ./...` · `sqlc generate` · `make build` (web + binary ke `bin/easypos`)
+- Satu tes: `go test ./internal/httpapi -run TestNama -v`; frontend: `npm --prefix web test -- <pola-file>`
+- `npm --prefix web run build` (menjalankan `tsc --noEmit` lalu vite) · `npm --prefix web test` · dev hot reload: `npm --prefix web run dev` (proxy `/api` ke :8080)
+- Go tidak membaca `.env`: pakai `.\scripts\dev.ps1 <perintah easypos>` (mis. `migrate up`, `serve`) di PowerShell.
+- Tes integrasi butuh `docker compose up -d db` (Postgres 16, port 5433) dan `EASYPOS_TEST_DATABASE_URL`; tanpa itu tes DB di-skip (bukan gagal), jadi `go test` hijau belum berarti DB teruji.
+
+## Arsitektur (butuh baca beberapa file)
+- **Mesin CRUD generik** (`internal/crud`): resource master data dideklarasikan sebagai `crud.Resource` (tabel, `Fields`, `Search`, `Filters`, `Expand`, hook `Validate/BeforeWrite/AfterSave/CanDelete/Locked/Decorate`). `Engine` menangani list/detail/create/update/delete, validasi 422, cek dipakai 409, audit `activity_logs`, dan filter `company_id` — jangan menulis handler CRUD manual untuk entitas baru. `Binder.Mount` memasang rute dengan route key. `internal/org` adalah contoh resource (company singleton, pajak, mata uang, gudang, gerai, pengguna).
+- **Status Fase 1**: spesifikasi di `docs/tasks/fase-1.md` (bentuk API, aturan hapus, audit, tes wajib per entitas). `org.Mount` belum dipasang di `internal/httpapi/router.go` dan belum dites.
+- **Auth/akses**: `identity` memegang token (kompatibel Sanctum `{id}|{token}`), `Allows` (matriks route key per peran) dan `writablePrefixes`. Cookie terpisah `easypos_bo_token` (backoffice) dan `easypos_pos_token` (`/api/pos/*`); Bearer didahulukan.
+- **Frontend** di-embed ke binary lewat `web/dist` (`internal/httpapi/web.go`), jadi build web dulu sebelum `go build`.
+- `internal/testutil.NewDB` membuat DB sementara + seed (company, 2 gerai, owner/manager/cashier/inactive; password `rahasia123`) per tes.
 
 ## Peran kerja
 Coding dikerjakan Sonnet berdasarkan spesifikasi (`docs/tasks/`) dan direview Opus.
